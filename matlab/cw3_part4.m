@@ -49,10 +49,6 @@ x=[x0, zeros(8,length(t)-1)];
 for t_step=1:length(t)-1
     [u,status,iA] = genMPController(H,G,F,bb,J,L,x(:,t_step),xTarget,size(B,2),iA);
     x(:,t_step+1)=A*x(:,t_step)+B*u;
-    if status ~= -1
-    %   status = -1 --> Cannot solve QP subject to constraints provided     
-        disp(status);
-    end
 end
 
 %% Plot results

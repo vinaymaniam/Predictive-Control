@@ -24,25 +24,14 @@ opt.DataType = 'double';
 %% This version doesn't make much sense but it works
 %% your code starts here
 % Cholksey and inverse already computed and stored in H
-Linv = H(1:m, 1:m);
+Linv = H;
 w = x - xTarget;
 f = w'*G';
 
-b = bb + J*x + L*xTarget;
-[v, status, iA1, ~] = mpcqpsolver(Linv, f', F, b, [], zeros(0,1), iA, opt);
+b = -(bb + J*x + L*xTarget);
+[v, status, iA1, ~] = mpcqpsolver(Linv, f', -F, b, [], zeros(0,1), iA, opt);
 %% your remaining code here
-u = v;
-%% This version makes more sense but doesnt work
-% %% your code starts here
-% % Cholksey and inverse already computed and stored in H
-% Linv = H;
-% w = x - xTarget;
-% f = w'*G';
-% 
-% b = bb + J*x + L*xTarget;
-% [v, status, iA1, ~] = mpcqpsolver(Linv, f', F, b, [], zeros(0,1), iA, opt);
-% %% your remaining code here
-% u = v(1:m);
+u = v(1:m);
 end
 
 % Remember to copy and paste your code above to the Simulink model.

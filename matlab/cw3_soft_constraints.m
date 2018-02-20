@@ -52,4 +52,4 @@ D=zeros(4,8);D(1,1)=1;D(2,3)=1;D(3,5)=1;D(4,7)=1;
 % Define weights for constraint violations
 rho = 2e3; % weight for exact penalty term
 S = 1.4e-3*eye(size(D,1)); % small positive definite quadratic cost to ensure uniqueness
-[Hs,gs,Fs,bs,Js,Ls] = genSoftPadding(H,F,bb,J,L,S,rho,size(B,2))
+[Hs,gs,Fs,bs,Js,Ls] = genSoftPadding(H,F,bb,J,L,S,rho,size(B,2));
