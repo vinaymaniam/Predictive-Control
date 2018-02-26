@@ -13,7 +13,7 @@ O2 = zeros(size(IkronS,1), size(H,2));
 Hs = [H, O1;
       O2, 2*kron(eye(N),S)];
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-gs = rho*ones(N,1);
+gs = rho*ones(N*size(S,1),1);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 nConstr = size(S,1);
 It = [-eye(nConstr); -eye(nConstr); zeros(m,nConstr); zeros(m,nConstr)];
