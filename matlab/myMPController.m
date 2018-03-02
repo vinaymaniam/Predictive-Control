@@ -6,16 +6,18 @@ function u = myMPController(r, x_hat, param)
     opt = mpcqpsolverOptions;
     opt.IntegrityChecks = false;%% for code generation
     opt.FeasibilityTol = 1e-3;
-    opt.DataType = 'double';
-    %% This version doesn't make much sense but it works
-    %% your code starts here
-    % Cholksey and inverse already computed and stored in H
-    w = x_hat - r;
-    f = w'*param.G';
-
-    b = -(param.bb + param.J*x_hat + param.L*r);
-    [v, ~, ~, ~] = mpcqpsolver(param.H, f', -param.F, b, [], zeros(0,1), false(size(param.bb)), opt);
-    %% your remaining code here
+    opt.DataType = 'double';    
+    %% Check if we crossed the turning point yet
+    if x_hat(1) < param.x_star
+        w = x_hat(1:8) - r(1:8);
+        f = w'*param.G1';
+        b = -(param.bb1 + param.J1*x_hat(1:8) + param.L1*r(1:8));
+        [v, ~, ~, ~] = mpcqpsolver(param.H1, f', -param.F1, b, [], zeros(0,1), false(size(param.bb1)), opt);        
+    else
+        w = x_hat(1:8) - r(1:8);
+        f = w'*param.G2';
+        b = -(param.bb2 + param.J2*x_hat(1:8) + param.L2*r(1:8));
+        [v, ~, ~, ~] = mpcqpsolver(param.H2, f', -param.F2, b, [], zeros(0,1), false(size(param.bb2)), opt);        
+    end   
     u = v(1:2);
-
 end % End of myMPController

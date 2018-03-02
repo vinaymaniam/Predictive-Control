@@ -4,20 +4,34 @@
 % the final position. This way, the controller will not spend too long
 % trying to perfectly fit intermediary positions before moving on.
 
-function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
-    tol = 0.00;
 
+% NEED TO PASS PARAM BY REFERENCE IN MYMPCCONTROLLER ELSE IT WONT UPDATE
+function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
+    % This is a sample static K matrix for the controller
+    param.K = [1, 0, 0, 0, 0, 0, 0, 0;
+               0, 0, 1, 0, 0, 0, 0, 0];
+       
     % This is a sample way to send reference points
-    param.xTar = targetPoint(1);
-    param.yTar = targetPoint(2);
+    param.OTP = targetPoint(1:2);
     
-    param.rTol = eps_r;
-    param.tTol = eps_t;
+    param.er = eps_r;
+    param.et = eps_t;
     
     param.start = startingPoint;
+    if size(c,1) == 6
+        param.c = c(2:5,:);
+        param.c(4,1) = param.c(4,1) - 0.02;
+        c = c([1 2 5 6],:);
+        c(3,1) = c(3,1) + 0.03;
+        param.TP = 0.5*(c(2,:) + c(3,:));
+        param.mode = 0;
+    else
+        param.TP = param.OTP;
+        param.mode = 1;        
+    end    
     
     load CraneParameters;
-    Ts=1/20;
+    Ts=1/10;
     Tf=2; % duration of prediction horizon in seconds
     N=ceil(Tf/Ts);
     [A,B,C,~] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vm,Ts);    
@@ -35,7 +49,9 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     %% Construct constraint matrix D
     % General form
     D = zeros(size(c,1) + 2, 8);
-    ch = zeros(size(c,1) + 2, 1);       
+    ch = zeros(size(c,1) + 2, 1);
+    
+    tol = 0.00;
     
     for i = 1:size(c,1)
         i2 = mod(i+1,size(c,1));
@@ -107,6 +123,9 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     
     param.A = A;
     param.C = C;
+    
+        
+    param.x_star = c(2,1) - 0.02;       
 end % End of mySetup
 
 
@@ -123,8 +142,8 @@ function r = myTargetGenerator(x_hat, param)
     % This is the block in which I have full control over how i decide where the crane
     % should go.
     % Make the crane go to (xTar, yTar)
-    r(1,1) = param.xTar;
-    r(3,1) = param.yTar;
+    r(1,1) = param.TP(1);
+    r(3,1) = param.TP(2);
     r = r(1:8);
 end % End of myTargetGenerator
 
@@ -153,6 +172,10 @@ function u = myMPController(r, x_hat, param)
     %% Do not delete this line
     % Create the output array of the appropriate size
     u = zeros(2,1);
+    %% Check if we crossed the turning point yet
+    if (param.mode == 0) & (x_hat(1) > param.x_star)
+        param = mySetup(param.c, x_hat([]), param.OTP, param.er, param.et);
+    end
     %% MPC Controller
     opt = mpcqpsolverOptions;
     opt.IntegrityChecks = false;%% for code generation

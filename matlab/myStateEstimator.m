@@ -6,7 +6,7 @@ function x_hat = myStateEstimator(u, y, param)
     %%    
 %     % By default, just pass the system measurements through
 %     x_hat( 1:length(y),1 ) = y;
-    x_hat = (param.C^-1)*y;
+    x_hat(1:8) = (param.C^-1)*y;
 end % End of myStateEstimator
 
 

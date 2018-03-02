@@ -4,20 +4,19 @@
 % the final position. This way, the controller will not spend too long
 % trying to perfectly fit intermediary positions before moving on.
 
+
+% NEED TO PASS PARAM BY REFERENCE IN MYMPCCONTROLLER ELSE IT WONT UPDATE
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     tol = 0.00;
-
+       
     % This is a sample way to send reference points
-    param.xTar = targetPoint(1);
-    param.yTar = targetPoint(2);
     
-    param.rTol = eps_r;
-    param.tTol = eps_t;
+    param.er = eps_r;
+    param.et = eps_t;
     
-    param.start = startingPoint;
     
     load CraneParameters;
-    Ts=1/20;
+    Ts=1/10;
     Tf=2; % duration of prediction horizon in seconds
     N=ceil(Tf/Ts);
     [A,B,C,~] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vm,Ts);    
@@ -29,30 +28,32 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     R=eye(2)*0.01; % very small penalty on input to demonstrate hard constraints
     P=Q; % terminal weight
 
-    %% Declare contraints
-    % Constrain only states (X,Y,theta,psi)
-    % Constrained vector is Dx, hence
+    %% Split shape into 2 quadrilaterals
+    c1 = c([1 2 5 6], :);
+    c2 = c([2 3 4 5], :);
+    % Skew the midpoint so that it doesn't have infinite gradient
+    c1(
+%%  c1
     %% Construct constraint matrix D
     % General form
-    D = zeros(size(c,1) + 2, 8);
-    ch = zeros(size(c,1) + 2, 1);       
+    D = zeros(size(c1,1) + 2, 8);
+    ch = zeros(size(c1,1) + 2, 1);        
     
-    for i = 1:size(c,1)
-        i2 = mod(i+1,size(c,1));
+    for i = 1:size(c1,1)
+        i2 = mod(i+1,size(c1,1));
         if i2 == 0
-            i2 = size(c,1);
+            i2 = size(c1,1);
         end        
-        if c(i,1) > c(i2,1)
+        if c1(i,1) > c1(i2,1)
             modifier = -1;
-            c1y = c(i,2) + tol;
-            c2y = c(i2,2) + tol;
+            c1y = c1(i,2) + tol;
+            c2y = c1(i2,2) + tol;
         else
             modifier = 1;
-            c1y = c(i,2) - tol;
-            c2y = c(i2,2) - tol;            
+            c1y = c1(i,2) - tol;
+            c2y = c1(i2,2) - tol;            
         end
-%         coeff = polyfit([c(i,1), c(i2,1)], [c(i,2), c(i2,2)], 1);
-        coeff = polyfit([c(i,1), c(i2,1)], [c1y, c2y], 1);
+        coeff = polyfit([c1(i,1), c1(i2,1)], [c1y, c2y], 1);
         D(i,1) = coeff(1) * modifier*(-1);
         D(i,3) = modifier;     
         ch(i) = modifier * coeff(2);
@@ -67,7 +68,6 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     uh=[1; 1];
 
     %% Compute stage constraint matrices and vector
-%     [Dt,Et,bt]=genStageConstraints(A,B,D,[],constraints,ul,uh);
     DA = D*A;
     DB = D*B;
     I = eye(size(B,2));
@@ -84,29 +84,85 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
 
     %% Compute QP cost matrices
     [H,G]=genCostMatrices(Gamma,Phi,Q,R,P,N);
-
-%     %% Compute matrices and vectors for soft constraints
-%     % Define weights for constraint violations
-%     rho = 1e3; % weight for exact penalty term
-%     S = 1e-3*eye(size(D,1)); % small positive definite quadratic cost to ensure uniqueness
-%     [Hs,gs,Fs,bs,Js,Ls] = genSoftPadding(H,F,bb,J,L,S,rho,size(B,2));
-% 
-%     %% replace matrices and vectors to simplify code
-%     H = Hs; F = Fs; bb = bs; J = Js; L = Ls;
-%     param.gs = gs;
+    
     %% Prepare cost and constraint matrices for mpcqpsolver
     H = chol(H,'lower');
     H=H\eye(size(H));    
     
-    param.H = H;
-    param.G = G;    
-    param.F = F;
-    param.J = J;
-    param.L = L;
-    param.bb = bb;
+    param.H1 = H;
+    param.G1 = G;    
+    param.F1 = F;
+    param.J1 = J;
+    param.L1 = L;
+    param.bb1 = bb;
+%%  c2
+    %% Construct constraint matrix D
+    % General form
+    D = zeros(size(c2,1) + 2, 8);
+    ch = zeros(size(c2,1) + 2, 1);        
     
+    for i = 1:size(c2,1)
+        i2 = mod(i+1,size(c2,1));
+        if i2 == 0
+            i2 = size(c2,1);
+        end        
+        if c2(i,1) > c2(i2,1)
+            modifier = -1;
+            c1y = c2(i,2) + tol;
+            c2y = c2(i2,2) + tol;
+        else
+            modifier = 1;
+            c1y = c2(i,2) - tol;
+            c2y = c2(i2,2) - tol;            
+        end
+        coeff = polyfit([c2(i,1), c2(i2,1)], [c1y, c2y], 1);
+        D(i,1) = coeff(1) * modifier*(-1);
+        D(i,3) = modifier;     
+        ch(i) = modifier * coeff(2);
+    end
+    angleConstraint = 2*pi/180; % in radians
+    D(end-1,5) = 1;      ch(end-1) = angleConstraint;
+    D(end,7) = 1;        ch(end) = angleConstraint;  
+
+    %% End of construction        
+    % Input constraints (hard)
+    ul=[-1; -1];
+    uh=[1; 1];
+
+    %% Compute stage constraint matrices and vector
+    DA = D*A;
+    DB = D*B;
+    I = eye(size(B,2));
+    O = zeros(size(B,2),size(A,2));
+    Dt = [DA; O; O];
+    Et = [DB; I; -I];
+    bt = [ch; uh; -ul];    
+    %% Compute trajectory constraints matrices and vector
+    [DD,EE,bb]=genTrajectoryConstraints(Dt,Et,bt,N);
+
+    %% Compute QP constraint matrices
+    [Gamma,Phi] = genPrediction(A,B,N); % get prediction matrices:
+    [F,J,L]=genConstraintMatrices(DD,EE,Gamma,Phi,N);
+
+    %% Compute QP cost matrices
+    [H,G]=genCostMatrices(Gamma,Phi,Q,R,P,N);
+    
+    %% Prepare cost and constraint matrices for mpcqpsolver
+    H = chol(H,'lower');
+    H=H\eye(size(H));    
+    
+    param.H2 = H;
+    param.G2 = G;    
+    param.F2 = F;
+    param.J2 = J;
+    param.L2 = L;
+    param.bb2 = bb;
+%%  Rest of code
     param.A = A;
     param.C = C;
+    
+        
+    param.x_star = c(2,1) - 0.02;       
 end % End of mySetup
 
 
@@ -123,9 +179,14 @@ function r = myTargetGenerator(x_hat, param)
     % This is the block in which I have full control over how i decide where the crane
     % should go.
     % Make the crane go to (xTar, yTar)
-    r(1,1) = param.xTar;
-    r(3,1) = param.yTar;
-    r = r(1:8);
+    if x_hat < param.x_star
+        r(1,1) = param.TP1(1);
+        r(3,1) = param.TP1(2);
+    else
+        r(1,1) = param.TP2(1);
+        r(3,1) = param.TP2(2);
+    end
+%     r = r(1:8);
 end % End of myTargetGenerator
 
 
@@ -141,7 +202,7 @@ function x_hat = myStateEstimator(u, y, param)
     %%    
 %     % By default, just pass the system measurements through
 %     x_hat( 1:length(y),1 ) = y;
-    x_hat = (param.C^-1)*y;
+    x_hat(1:8) = (param.C^-1)*y;
 end % End of myStateEstimator
 
 
@@ -157,19 +218,18 @@ function u = myMPController(r, x_hat, param)
     opt = mpcqpsolverOptions;
     opt.IntegrityChecks = false;%% for code generation
     opt.FeasibilityTol = 1e-3;
-    opt.DataType = 'double';
-    %% your code starts here
-    % Cholksey and inverse already computed and stored in H
-    w = x_hat - r;
-    f = w'*param.G';
-
-    b = -(param.bb + param.J*x_hat + param.L*r);
-    [v, ~, ~, ~] = mpcqpsolver(param.H, f', -param.F, b, [], zeros(0,1), false(size(param.bb)), opt);
-%     w = x_hat - r;
-%     f = [w'*param.G', param.gs'];
-% 
-%     b = -(param.bb + param.J*x_hat + param.L*r);
-%     [v, ~, ~, ~] = mpcqpsolver(param.H, f', -param.F, b, [], zeros(0,1), false(size(param.bb)), opt);
-    %% your remaining code here
+    opt.DataType = 'double';    
+    %% Check if we crossed the turning point yet
+    if x_hat(1) < param.x_star
+        w = x_hat(1:8) - r;
+        f = w'*param.G1';
+        b = -(param.bb1 + param.J1*x_hat(1:8) + param.L1*r(1:8));
+        [v, ~, ~, ~] = mpcqpsolver(param.H1, f', -param.F1, b, [], zeros(0,1), false(size(param.bb)), opt);        
+    else
+        w = x_hat(1:8) - r;
+        f = w'*param.G2';
+        b = -(param.bb2 + param.J2*x_hat(1:8) + param.L2*r);
+        [v, ~, ~, ~] = mpcqpsolver(param.H2, f', -param.F2, b, [], zeros(0,1), false(size(param.bb)), opt);        
+    end   
     u = v(1:2);
 end % End of myMPController

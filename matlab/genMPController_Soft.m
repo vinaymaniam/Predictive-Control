@@ -6,7 +6,6 @@ opt = mpcqpsolverOptions;
 opt.IntegrityChecks = false;%% for code generation
 opt.FeasibilityTol = 1e-3;
 opt.DataType = 'double';
-%% This version doesn't make much sense but it works
 %% your code starts here
 % Cholksey and inverse already computed and stored in H
 Linv = H;

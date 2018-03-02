@@ -7,9 +7,14 @@ function r = myTargetGenerator(x_hat, param)
     % This is the block in which I have full control over how i decide where the crane
     % should go.
     % Make the crane go to (xTar, yTar)
-    r(1,1) = param.xTar;
-    r(3,1) = param.yTar;
-    r = r(1:8);
+    if x_hat(1) < param.x_star
+        r(1,1) = param.TP1(1);
+        r(3,1) = param.TP1(2);
+    else
+        r(1,1) = param.TP2(1);
+        r(3,1) = param.TP2(2);
+    end
+%     r = r(1:8);
 end % End of myTargetGenerator
 
 
