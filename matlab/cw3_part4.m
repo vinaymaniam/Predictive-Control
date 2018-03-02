@@ -2,7 +2,7 @@ clear all
 rng default
 load CraneParameters;
 xRange = [0 0.52];
-yRange = [0 0.62];
+yRange = [0 0.52];
 Ts=1/10;
 Tf=2; % duration of prediction horizon in seconds
 N=ceil(Tf/Ts);
@@ -21,7 +21,6 @@ ul=[-1; -1];
 uh=[1; 1];
 % constrained vector is Dx, hence
 D=zeros(4,8);D(1,1)=1;D(2,3)=1;D(3,5)=1;D(4,7)=1;
-
 %% Compute stage constraint matrices and vector
 [Dt,Et,bt]=genStageConstraints(A,B,D,cl,ch,ul,uh);
 
@@ -38,7 +37,6 @@ D=zeros(4,8);D(1,1)=1;D(2,3)=1;D(3,5)=1;D(4,7)=1;
 % Calculating the inverse of the lower triangular H. see doc mpcqpsolver.
 H = chol(H,'lower');
 H=(H'\eye(size(H)))';
-
 %% Run a linear simulation to test your genMPController function
 xTarget=[0.3 0 0.45 0 0 0 0 0]';% target equilibrium state
 x0=[0.52/2 0 0.62/2 0 0 0 0 0]'; % starting offset
