@@ -1,18 +1,28 @@
 %% Modify the following function for your setup function
+% DONE #############################################################
 % IDEA: take c in pieces and work on optimising a route piece by piece.
 % Then, for all but the last set of constraints, apply a weak penalty on 
 % the final position. This way, the controller will not spend too long
 % trying to perfectly fit intermediary positions before moving on.
-
-
-% NEED TO PASS PARAM BY REFERENCE IN MYMPCCONTROLLER ELSE IT WONT UPDATE
+% ##################################################################
+% NEXT STEPS:
+% Soft constraints on shape 2. make the constraints the middle path through
+% the shape, and then let the soft constraints permit the system to deviate
+% slightly.
+% TRY SETTING X_HAT TO THE COORDINATES OF THE PENDULUM RATHER THAN THAT OF
+% THE CART!!
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
-    tol = 0;
+    trackwidth = c(2,2) - c(5,2);
+    utol = 0.2*trackwidth; ltol = 0.2*trackwidth;
     angleConstraint = 2*pi/180; % in radians
-       
+    midpoint = 0.3; % distance between 2 mid points to set 1st target
+    % Input constraints (hard)
+    ul=[-1; -1];
+    uh=[1; 1];      
     % This is a sample way to send reference points
     % Set targets
-    param.TP1 = 0.5*(c(2,:) + c(5,:));
+%     param.TP1 = 0.5*c(2,:) + 0.5*c(5,:);
+    param.TP1 = midpoint*c(2,:) + (1-midpoint)*c(5,:);
     param.TP2 = targetPoint;
     
     param.er = eps_r;
@@ -25,11 +35,10 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     N=ceil(Tf/Ts);
     [A,B,C,~] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vm,Ts);    
     %% Declare penalty matrices and tune them here:
-    Q = 0.01*eye(8);
-    Q(1,1) = 50; % weight on X
-    Q(3,3) = 50; % weight on Y
+%     Q = diag([10 0 10 0 1 0 1 0]);
+    Q = diag([30 0.001 30 0.001 1 0.001 1 0.001]);
 
-    R = eye(2)*0.01; % very small penalty on input to demonstrate hard constraints
+    R = eye(2)*0.5; % very small penalty on input to demonstrate hard constraints
     P = Q; % terminal weight
 
     %% Split shape into 2 quadrilaterals
@@ -51,12 +60,12 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
         end        
         if c1(i,1) > c1(i2,1)
             modifier = -1;
-            c1y = c1(i,2) + tol;
-            c2y = c1(i2,2) + tol;
+            c1y = c1(i,2) + ltol;
+            c2y = c1(i2,2) + ltol;
         else
             modifier = 1;
-            c1y = c1(i,2) - tol;
-            c2y = c1(i2,2) - tol;            
+            c1y = c1(i,2) - utol;
+            c2y = c1(i2,2) - utol;            
         end
         coeff = polyfit([c1(i,1), c1(i2,1)], [c1y, c2y], 1);
         D(i,1) = coeff(1) * modifier*(-1);
@@ -67,9 +76,6 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     D(end,7) = 1;        ch(end) = angleConstraint;  
 
     %% End of construction        
-    % Input constraints (hard)
-    ul=[-1; -1];
-    uh=[1; 1];
 
     %% Compute stage constraint matrices and vector
     DA = D*A;
@@ -112,12 +118,12 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
         end        
         if c2(i,1) > c2(i2,1)
             modifier = -1;
-            c1y = c2(i,2) + tol;
-            c2y = c2(i2,2) + tol;
+            c1y = c2(i,2) + ltol;
+            c2y = c2(i2,2) + ltol;
         else
             modifier = 1;
-            c1y = c2(i,2) - tol;
-            c2y = c2(i2,2) - tol;            
+            c1y = c2(i,2) - utol;
+            c2y = c2(i2,2) - utol;            
         end
         coeff = polyfit([c2(i,1), c2(i2,1)], [c1y, c2y], 1);
         D(i,1) = coeff(1) * modifier*(-1);
@@ -166,7 +172,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     param.C = C;
     
         
-    param.x_star = c(2,1) - 0.02;       
+    param.x_star = c(2,1) - 0;       
 end % End of mySetup
 
 

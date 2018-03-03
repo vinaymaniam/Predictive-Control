@@ -1,6 +1,10 @@
+%% Notes on this version
+% no soft constraints
+% reaches destination in about 3 seconds
+% noticeable spiral at end
+% fits well within the bounds
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
-    trackwidth = c(2,2) - c(5,2);
-    utol = 0.2*trackwidth; ltol = 0.2*trackwidth;
+    utol = 0.03; ltol = 0.0;
     angleConstraint = 2*pi/180; % in radians
     midpoint = 0.3; % distance between 2 mid points to set 1st target
     % Input constraints (hard)
@@ -167,3 +171,66 @@ end % End of mySetup
 
 
 %% Modify the following function for your target generation
+function r = myTargetGenerator(x_hat, param)
+
+    %% Do not delete this line
+    % Create the output array of the appropriate size
+    r = zeros(10,1);
+    %%
+    % This is the block in which I have full control over how i decide where the crane
+    % should go.
+    % Make the crane go to (xTar, yTar)
+    if x_hat(1) < param.x_star
+        r(1,1) = param.TP1(1);
+        r(3,1) = param.TP1(2);
+    else
+        r(1,1) = param.TP2(1);
+        r(3,1) = param.TP2(2);
+    end
+%     r = r(1:8);
+end % End of myTargetGenerator
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+%% Modify the following function for your state estimator (if desired)
+function x_hat = myStateEstimator(u, y, param)
+
+    %% Do not delete this line
+    % Create the output array of the appropriate size
+    x_hat = zeros(16,1);
+    %%    
+%     % By default, just pass the system measurements through
+%     x_hat( 1:length(y),1 ) = y;
+    x_hat(1:8) = (param.C^-1)*y;
+end % End of myStateEstimator
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+%% Modify the following function for your controller
+function u = myMPController(r, x_hat, param)
+    %% Do not delete this line
+    % Create the output array of the appropriate size
+    u = zeros(2,1);
+    %% MPC Controller
+    opt = mpcqpsolverOptions;
+    opt.IntegrityChecks = false;%% for code generation
+    opt.FeasibilityTol = 1e-3;
+    opt.DataType = 'double';    
+    %% Check if we crossed the turning point yet
+    if x_hat(1) < param.x_star
+        w = x_hat(1:8) - r(1:8);
+        f = w'*param.G1';
+        b = -(param.bb1 + param.J1*x_hat(1:8) + param.L1*r(1:8));
+        [v, ~, ~, ~] = mpcqpsolver(param.H1, f', -param.F1, b, [], zeros(0,1), false(size(param.bb1)), opt);        
+    else
+        w = x_hat(1:8) - r(1:8);
+        f = w'*param.G2';
+        b = -(param.bb2 + param.J2*x_hat(1:8) + param.L2*r(1:8));
+        [v, ~, ~, ~] = mpcqpsolver(param.H2, f', -param.F2, b, [], zeros(0,1), false(size(param.bb2)), opt);        
+    end   
+    u = v(1:2);
+end % End of myMPController
