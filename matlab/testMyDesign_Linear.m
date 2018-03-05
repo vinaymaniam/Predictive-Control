@@ -1,16 +1,17 @@
 clear variables
 close all
 
-testShape = 2;
+testShape = 1;
 
 
 %% Create the test shape
 switch ( testShape )
     case 1
-        c = [0.00, 0.05;
-             0.45, 0.50;
-             0.50, 0.45;
-             0.05, 0.00];
+%         c = [0.00, 0.05;
+%              0.45, 0.50;
+%              0.50, 0.45;
+%              0.05, 0.00];
+        c = shape([0.05, 0.05],[0.4,0.4],0.05,0,1);
     case 2
         c = [0.00, 0.05;
              0.25, 0.30;

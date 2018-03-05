@@ -1,13 +1,11 @@
-%% Modify the following function for your setup function
-% IDEA: take c in pieces and work on optimising a route piece by piece.
-% Then, for all but the last set of constraints, apply a weak penalty on 
-% the final position. This way, the controller will not spend too long
-% trying to perfectly fit intermediary positions before moving on.
 
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     tol = 0;
     angleConstraint = 2*pi/180; % in radians
-
+    inputAttenuation = 0.78; % best=0.78
+    ul=inputAttenuation*[-1; -1];
+    uh=inputAttenuation*[1; 1];
+    Tf=2*inputAttenuation; % duration of prediction horizon in seconds
     % This is a sample way to send reference points
     param.xTar = targetPoint(1);
     param.yTar = targetPoint(2);
@@ -18,8 +16,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     param.start = startingPoint;
     
     load CraneParameters;
-    Ts=1/20;
-    Tf=2; % duration of prediction horizon in seconds
+    Ts=1/20;    
     N=ceil(Tf/Ts);
     [A,B,C,~] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vm,Ts);    
     %% Declare penalty matrices and tune them here:
@@ -62,9 +59,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     D(end,7) = 1;        ch(end) = angleConstraint;  
 
     %% End of construction        
-    % Input constraints (hard)
-    ul=[-1; -1];
-    uh=[1; 1];
+    
 
     %% Compute stage constraint matrices and vector
 %     [Dt,Et,bt]=genStageConstraints(A,B,D,[],constraints,ul,uh);
@@ -123,6 +118,15 @@ function r = myTargetGenerator(x_hat, param)
     % Make the crane go to (xTar, yTar)
     r(1,1) = param.xTar;
     r(3,1) = param.yTar;
+    condition = (abs(x_hat(1) - param.xTar) < param.tTol) &...
+                (abs(x_hat(3) - param.yTar) < param.tTol) &...
+                (abs(x_hat(2)) < param.rTol) &...
+                (abs(x_hat(4)) < param.rTol)&...
+                (abs(x_hat(6)) < param.rTol)&...
+                (abs(x_hat(8)) < param.rTol);
+    if condition
+        r(1:8) = x_hat(1:8);
+    end
 end % End of myTargetGenerator
 
 
@@ -136,7 +140,7 @@ function x_hat = myStateEstimator(u, y, param)
     % Create the output array of the appropriate size
     x_hat = zeros(16,1);
     %% Pendulum is assumed to be of length 0.47m
-    x_hat = param.C\y;
+    x_hat(1:8) = param.C\y;
 end % End of myStateEstimator
 
 
@@ -149,12 +153,13 @@ function u = myMPController(r, x_hat, param)
     % Create the output array of the appropriate size
     u = zeros(2,1);
     %% Check if crane is at target point
-    condition = (abs(x_hat(1) - param.xTar) < param.tTol) &...
-                (abs(x_hat(3) - param.yTar) < param.tTol) &...
-                (abs(x_hat(2)) < param.rTol) &...
-                (abs(x_hat(4)) < param.rTol)&...
-                (abs(x_hat(6)) < param.rTol)&...
-                (abs(x_hat(8)) < param.rTol);
+%     condition = (abs(x_hat(1) - param.xTar) < param.tTol) &...
+%                 (abs(x_hat(3) - param.yTar) < param.tTol) &...
+%                 (abs(x_hat(2)) < param.rTol) &...
+%                 (abs(x_hat(4)) < param.rTol)&...
+%                 (abs(x_hat(6)) < param.rTol)&...
+%                 (abs(x_hat(8)) < param.rTol);
+    condition = 0;
     if ~condition    
         %% MPC Controller
         opt = mpcqpsolverOptions;
@@ -163,11 +168,11 @@ function u = myMPController(r, x_hat, param)
         opt.DataType = 'double';
         %% your code starts here
         % Cholksey and inverse already computed and stored in H
-        w = x_hat - r(1:8);
+        w = x_hat(1:8) - r(1:8);
     %     f = [w'*param.G', param.gs']; % Soft
         f = w'*param.G'; % Hard
 
-        b = -(param.bb + param.J*x_hat + param.L*r(1:8));
+        b = -(param.bb + param.J*x_hat(1:8) + param.L*r(1:8));
         [v, ~, ~, ~] = mpcqpsolver(param.H, f', -param.F, b, [], zeros(0,1), false(size(param.bb)), opt);
         %% your remaining code here
         u = v(1:2);
