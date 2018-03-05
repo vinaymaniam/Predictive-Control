@@ -17,8 +17,9 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     angleConstraint = 2*pi/180; % in radians
     midpoint = 0.3; % distance between 2 mid points to set 1st target
     % Input constraints (hard)
-    ul=[-1; -1];
-    uh=[1; 1];      
+    inputAttenuation = 1;
+    ul=inputAttenuation*[-1; -1];
+    uh=inputAttenuation*[1; 1];     
     % This is a sample way to send reference points
     % Set targets
 %     param.TP1 = 0.5*c(2,:) + 0.5*c(5,:);
@@ -196,7 +197,6 @@ function r = myTargetGenerator(x_hat, param)
         r(1,1) = param.TP2(1);
         r(3,1) = param.TP2(2);
     end
-%     r = r(1:8);
 end % End of myTargetGenerator
 
 

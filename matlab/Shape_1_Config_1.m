@@ -5,7 +5,8 @@
 % trying to perfectly fit intermediary positions before moving on.
 
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
-    tol = 0.00;
+    tol = 0;
+    angleConstraint = 2*pi/180; % in radians
 
     % This is a sample way to send reference points
     param.xTar = targetPoint(1);
@@ -56,8 +57,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
         D(i,1) = coeff(1) * modifier*(-1);
         D(i,3) = modifier;     
         ch(i) = modifier * coeff(2);
-    end
-    angleConstraint = 2*pi/180; % in radians
+    end    
     D(end-1,5) = 1;      ch(end-1) = angleConstraint;
     D(end,7) = 1;        ch(end) = angleConstraint;  
 
@@ -120,12 +120,9 @@ function r = myTargetGenerator(x_hat, param)
     % Create the output array of the appropriate size
     r = zeros(10,1);
     %%
-    % This is the block in which I have full control over how i decide where the crane
-    % should go.
     % Make the crane go to (xTar, yTar)
     r(1,1) = param.xTar;
     r(3,1) = param.yTar;
-    r = r(1:8);
 end % End of myTargetGenerator
 
 
@@ -138,10 +135,8 @@ function x_hat = myStateEstimator(u, y, param)
     %% Do not delete this line
     % Create the output array of the appropriate size
     x_hat = zeros(16,1);
-    %%    
-%     % By default, just pass the system measurements through
-%     x_hat( 1:length(y),1 ) = y;
-    x_hat = (param.C^-1)*y;
+    %% Pendulum is assumed to be of length 0.47m
+    x_hat = param.C\y;
 end % End of myStateEstimator
 
 
@@ -153,23 +148,28 @@ function u = myMPController(r, x_hat, param)
     %% Do not delete this line
     % Create the output array of the appropriate size
     u = zeros(2,1);
-    %% MPC Controller
-    opt = mpcqpsolverOptions;
-    opt.IntegrityChecks = false;%% for code generation
-    opt.FeasibilityTol = 1e-3;
-    opt.DataType = 'double';
-    %% your code starts here
-    % Cholksey and inverse already computed and stored in H
-    w = x_hat - r;
-    f = w'*param.G';
+    %% Check if crane is at target point
+    condition = (abs(x_hat(1) - param.xTar) < param.tTol) &...
+                (abs(x_hat(3) - param.yTar) < param.tTol) &...
+                (abs(x_hat(2)) < param.rTol) &...
+                (abs(x_hat(4)) < param.rTol)&...
+                (abs(x_hat(6)) < param.rTol)&...
+                (abs(x_hat(8)) < param.rTol);
+    if ~condition    
+        %% MPC Controller
+        opt = mpcqpsolverOptions;
+        opt.IntegrityChecks = false;%% for code generation
+        opt.FeasibilityTol = 1e-3;
+        opt.DataType = 'double';
+        %% your code starts here
+        % Cholksey and inverse already computed and stored in H
+        w = x_hat - r(1:8);
+    %     f = [w'*param.G', param.gs']; % Soft
+        f = w'*param.G'; % Hard
 
-    b = -(param.bb + param.J*x_hat + param.L*r);
-    [v, ~, ~, ~] = mpcqpsolver(param.H, f', -param.F, b, [], zeros(0,1), false(size(param.bb)), opt);
-%     w = x_hat - r;
-%     f = [w'*param.G', param.gs'];
-% 
-%     b = -(param.bb + param.J*x_hat + param.L*r);
-%     [v, ~, ~, ~] = mpcqpsolver(param.H, f', -param.F, b, [], zeros(0,1), false(size(param.bb)), opt);
-    %% your remaining code here
-    u = v(1:2);
+        b = -(param.bb + param.J*x_hat + param.L*r(1:8));
+        [v, ~, ~, ~] = mpcqpsolver(param.H, f', -param.F, b, [], zeros(0,1), false(size(param.bb)), opt);
+        %% your remaining code here
+        u = v(1:2);
+    end
 end % End of myMPController

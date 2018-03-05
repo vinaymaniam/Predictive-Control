@@ -1,10 +1,19 @@
-%% Notes on this version
-% no soft constraints
-% reaches destination in about 3 seconds
-% noticeable spiral at end
-% fits well within the bounds
+%% Modify the following function for your setup function
+% DONE #############################################################
+% IDEA: take c in pieces and work on optimising a route piece by piece.
+% Then, for all but the last set of constraints, apply a weak penalty on 
+% the final position. This way, the controller will not spend too long
+% trying to perfectly fit intermediary positions before moving on.
+% ##################################################################
+% NEXT STEPS:
+% Soft constraints on shape 2. make the constraints the middle path through
+% the shape, and then let the soft constraints permit the system to deviate
+% slightly.
+% TRY SETTING X_HAT TO THE COORDINATES OF THE PENDULUM RATHER THAN THAT OF
+% THE CART!!
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
-    utol = 0.03; ltol = 0.0;
+    trackwidth = c(2,2) - c(5,2);
+    utol = 0.2*trackwidth; ltol = 0.2*trackwidth;
     angleConstraint = 2*pi/180; % in radians
     midpoint = 0.3; % distance between 2 mid points to set 1st target
     % Input constraints (hard)

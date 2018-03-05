@@ -14,7 +14,6 @@ function r = myTargetGenerator(x_hat, param)
         r(1,1) = param.TP2(1);
         r(3,1) = param.TP2(2);
     end
-%     r = r(1:8);
 end % End of myTargetGenerator
 
 
