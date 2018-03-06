@@ -1,3 +1,8 @@
+%% Modify the following function for your setup function
+% IDEA: take c in pieces and work on optimising a route piece by piece.
+% Then, for all but the last set of constraints, apply a weak penalty on 
+% the final position. This way, the controller will not spend too long
+% trying to perfectly fit intermediary positions before moving on.
 
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     tol = 0;
@@ -5,7 +10,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     inputAttenuation = 0.78; % best=0.78
     ul=inputAttenuation*[-1; -1];
     uh=inputAttenuation*[1; 1];
-    Tf=2*inputAttenuation; % duration of prediction horizon in seconds
+    Tf=2; % duration of prediction horizon in seconds
     % This is a sample way to send reference points
     param.xTar = targetPoint(1);
     param.yTar = targetPoint(2);
@@ -21,9 +26,9 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     [A,B,C,~] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vm,Ts);    
     %% Declare penalty matrices and tune them here:
     Q=zeros(8);
-    Q(1,1)=10; % weight on X
-    Q(3,3)=10; % weight on Y
-
+%     Q(1,1)=10; % weight on X
+%     Q(3,3)=10; % weight on Y
+    Q = diag([10,0,10,0,50,0,50,0]);
     R=eye(2)*0.01; % very small penalty on input to demonstrate hard constraints
     P=Q; % terminal weight
 
@@ -159,7 +164,7 @@ function u = myMPController(r, x_hat, param)
 %                 (abs(x_hat(4)) < param.rTol)&...
 %                 (abs(x_hat(6)) < param.rTol)&...
 %                 (abs(x_hat(8)) < param.rTol);
-    condition = 0;
+    condition = 0; % Leave the condition to be handled by target gen
     if ~condition    
         %% MPC Controller
         opt = mpcqpsolverOptions;

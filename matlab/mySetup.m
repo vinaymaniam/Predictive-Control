@@ -4,7 +4,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     inputAttenuation = 0.78; % best=0.78
     ul=inputAttenuation*[-1; -1];
     uh=inputAttenuation*[1; 1];
-    Tf=2*inputAttenuation; % duration of prediction horizon in seconds
+    Tf=2; % duration of prediction horizon in seconds
     % This is a sample way to send reference points
     param.xTar = targetPoint(1);
     param.yTar = targetPoint(2);

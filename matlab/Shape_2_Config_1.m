@@ -13,20 +13,22 @@
 % THE CART!!
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     trackwidth = c(2,2) - c(5,2);
-    utol = 0.2*trackwidth; ltol = 0.2*trackwidth;
+    utol = 0.15*trackwidth; ltol = 0.15*trackwidth;
     angleConstraint = 2*pi/180; % in radians
-    midpoint = 0.3; % distance between 2 mid points to set 1st target
+    midpoint = 0.5; % distance between 2 mid points to set 1st target
     % Input constraints (hard)
-    ul=[-1; -1];
-    uh=[1; 1];      
+    inputAttenuation = 0.8;
+    ul=inputAttenuation*[-1; -1];
+    uh=inputAttenuation*[1; 1];    
+    param.x_star = c(2,1) - 0.01;  
     % This is a sample way to send reference points
     % Set targets
-%     param.TP1 = 0.5*c(2,:) + 0.5*c(5,:);
-    param.TP1 = midpoint*c(2,:) + (1-midpoint)*c(5,:);
+    offsetTP1 = [0.0 0.0];
+    param.TP1 = midpoint*(c(2,:)+offsetTP1) + (1-midpoint)*(c(5,:)+offsetTP1);
     param.TP2 = targetPoint;
     
-    param.er = eps_r;
-    param.et = eps_t;
+    param.rTol = eps_r;
+    param.tTol = eps_t;
     
     
     load CraneParameters;
@@ -35,18 +37,18 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     N=ceil(Tf/Ts);
     [A,B,C,~] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vm,Ts);    
     %% Declare penalty matrices and tune them here:
-%     Q = diag([10 0 10 0 1 0 1 0]);
-    Q = diag([30 0.001 30 0.001 1 0.001 1 0.001]);
+%     Q = diag([10 0 10 0 0 0 0 0]);
+    Q = diag([1 0 1 0 1 0 1 0]);
 
-    R = eye(2)*0.5; % very small penalty on input to demonstrate hard constraints
+    R = eye(2)*0.01; % very small penalty on input to demonstrate hard constraints
     P = Q; % terminal weight
 
     %% Split shape into 2 quadrilaterals
     c1 = c([1 2 5 6], :);
     c2 = c([2 3 4 5], :);
     % Skew the midpoint so that it doesn't have infinite gradient
-    c1(3,1) = c1(3,1) + 0.01;
-    c2(4,1) = c2(4,1) - 0.01;
+    c1(3,1) = c1(3,1) + 0.02;
+    c2(4,1) = c2(4,1) - 0.02;
 %%  c1
     %% Construct constraint matrix D
     % General form
@@ -170,9 +172,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
 %%  Rest of code
     param.A = A;
     param.C = C;
-    
-        
-    param.x_star = c(2,1) - 0;       
+                     
 end % End of mySetup
 
 
@@ -193,10 +193,19 @@ function r = myTargetGenerator(x_hat, param)
         r(1,1) = param.TP1(1);
         r(3,1) = param.TP1(2);
     else
-        r(1,1) = param.TP2(1);
-        r(3,1) = param.TP2(2);
-    end
-%     r = r(1:8);
+        condition = (abs(x_hat(1) - param.TP2(1)) < param.tTol) &...
+                    (abs(x_hat(3) - param.TP2(2)) < param.tTol) &...
+                    (abs(x_hat(2)) < param.rTol) &...
+                    (abs(x_hat(4)) < param.rTol)&...
+                    (abs(x_hat(6)) < param.rTol)&...
+                    (abs(x_hat(8)) < param.rTol);
+        if condition
+            r(1:8) = x_hat(1:8);
+        else
+            r(1,1) = param.TP2(1);
+            r(3,1) = param.TP2(2);
+        end
+    end   
 end % End of myTargetGenerator
 
 
@@ -243,3 +252,4 @@ function u = myMPController(r, x_hat, param)
     end   
     u = v(1:2);
 end % End of myMPController
+s
