@@ -16,8 +16,7 @@ Hs = [H, O1;
 gs = rho*ones(N*size(S,1),1);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 nConstr = size(S,1);
-% It = [-eye(nConstr); -eye(nConstr); zeros(m,nConstr); zeros(m,nConstr)];
-It = [-eye(nConstr); zeros(m,nConstr); zeros(m,nConstr)];
+It = [-eye(nConstr); -eye(nConstr); zeros(m,nConstr); zeros(m,nConstr)];
 Ibar = kron(eye(N), It);
 
 Fs = [F, Ibar;

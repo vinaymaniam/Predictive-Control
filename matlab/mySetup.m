@@ -1,67 +1,174 @@
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
-    tol = 0;
+    trackwidth = c(2,2) - c(5,2);
+    utol = 0.15*trackwidth; ltol = 0.15*trackwidth;
     angleConstraint = 2*pi/180; % in radians
-    inputAttenuation = 0.78; % best=0.78
+    midpoint = 0.5; % distance between 2 mid points to set 1st target
+    % Input constraints (hard)
+    inputAttenuation = 0.8;
     ul=inputAttenuation*[-1; -1];
-    uh=inputAttenuation*[1; 1];
-    Tf=2; % duration of prediction horizon in seconds
+    uh=inputAttenuation*[1; 1];    
+    param.x_star = c(2,1) - 0.01;  
     % This is a sample way to send reference points
-    param.xTar = targetPoint(1);
-    param.yTar = targetPoint(2);
+    % Set targets
+    offsetTP1 = [0.0 0.0];
+    param.TP1 = [0 0]; % assigned in splitline
+    param.TP2 = targetPoint;
     
     param.rTol = eps_r;
     param.tTol = eps_t;
     
-    param.start = startingPoint;
     
     load CraneParameters;
-    Ts=1/20;    
+    Ts=1/20;
+    Tf=2; % duration of prediction horizon in seconds
     N=ceil(Tf/Ts);
     [A,B,C,~] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vm,Ts);    
     %% Declare penalty matrices and tune them here:
-    Q=zeros(8);
-%     Q(1,1)=10; % weight on X
-%     Q(3,3)=10; % weight on Y
-    Q = diag([10,0,10,0,50,0,50,0]);
-    R=eye(2)*0.01; % very small penalty on input to demonstrate hard constraints
-    P=Q; % terminal weight
+%     Q = diag([10 0 10 0 0 0 0 0]);
+    Q = diag([1 0 1 0 1 0 1 0]);
 
-    %% Declare contraints
-    % Constrain only states (X,Y,theta,psi)
-    % Constrained vector is Dx, hence
+    R = eye(2)*0.01; % very small penalty on input to demonstrate hard constraints
+    P = Q; % terminal weight
+    
+    %% Find splitting line
+    ctmp = [c, zeros(size(c,1),1)];
+    switch_line = [0 0];
+    c1 = zeros(4,2);
+    c2 = zeros(4,2);
+    for i = 1:size(ctmp,1)
+        i0 = mod(i,size(c,1)); i0(i0==0) = 6;
+        i1 = mod(i+1,size(c,1)); i1(i1==0) = 6;
+        i2 = mod(i+2,size(c,1)); i2(i2==0) = 6;
+        i3 = mod(i+3,size(c,1)); i3(i3==0) = 6;
+        i4 = mod(i+4,size(c,1)); i4(i4==0) = 6;
+        i5 = mod(i+5,size(c,1)); i5(i5==0) = 6;
+        i6 = mod(i+6,size(c,1)); i6(i6==0) = 6;
+        
+        l1 = ctmp(i1,:) - ctmp(i,:);
+        l2 = ctmp(i2,:) - ctmp(i1,:);
+        cp = cross(l1,l2);
+        if min(cp) >= 0
+            if c(i1,1) == c(i4,1)
+                switch_line = polyfit([c(i1,1), c(i4,1)], [c(i1,2), c(i4,2)],1);  
+                switch_line(1) = -10e10;
+                switch_line(2) = c(i1,2) - switch_line(1)*c(i1,1);
+            else
+                switch_line = polyfit([c(i1,1), c(i4,1)], [c(i1,2), c(i4,2)],1);  
+            end
+            disp(i)
+            c2 = c([i0,i1,i4,i5],:);
+            c1 = c([i1,i2,i3,i4],:);
+            param.TP1 = midpoint*(c(i1,:)+offsetTP1) + (1-midpoint)*(c(i4,:)+offsetTP1);
+        end
+    end
+    param.switch_line = switch_line;
+    if startingPoint(2) > switch_line(1)*startingPoint(1) + switch_line(2)
+        param.toggle = -1;
+    else
+        param.toggle = 1;
+    end
+    %% Split shape into 2 quadrilaterals
+%     c1 = c([1 2 5 6], :);
+%     c2 = c([2 3 4 5], :);
+    % Skew the midpoint so that it doesn't have infinite gradient
+%     c1(3,1) = c1(3,1) + 0.02;
+%     c2(4,1) = c2(4,1) - 0.02;
+%%  c1
     %% Construct constraint matrix D
     % General form
-    D = zeros(size(c,1) + 2, 8);
-    ch = zeros(size(c,1) + 2, 1);       
+    D = zeros(size(c1,1) + 2, 8);
+    ch = zeros(size(c1,1) + 2, 1);        
     
-    for i = 1:size(c,1)
-        i2 = mod(i+1,size(c,1));
+    for i = 1:size(c1,1)
+        i2 = mod(i+1,size(c1,1));
         if i2 == 0
-            i2 = size(c,1);
+            i2 = size(c1,1);
         end        
-        if c(i,1) > c(i2,1)
+        if c1(i,1) > c1(i2,1)
             modifier = -1;
-            c1y = c(i,2) + tol;
-            c2y = c(i2,2) + tol;
+            c1y = c1(i,2) + ltol;
+            c2y = c1(i2,2) + ltol;
         else
             modifier = 1;
-            c1y = c(i,2) - tol;
-            c2y = c(i2,2) - tol;            
+            c1y = c1(i,2) - utol;
+            c2y = c1(i2,2) - utol;            
         end
-%         coeff = polyfit([c(i,1), c(i2,1)], [c(i,2), c(i2,2)], 1);
-        coeff = polyfit([c(i,1), c(i2,1)], [c1y, c2y], 1);
+        coeff = polyfit([c1(i,1), c1(i2,1)], [c1y, c2y], 1);
         D(i,1) = coeff(1) * modifier*(-1);
         D(i,3) = modifier;     
         ch(i) = modifier * coeff(2);
     end    
     D(end-1,5) = 1;      ch(end-1) = angleConstraint;
     D(end,7) = 1;        ch(end) = angleConstraint;  
-
+    cl = -inf*ones(size(ch));
+    cl(end-1) = -angleConstraint;
+    cl(end) = -angleConstraint;
     %% End of construction        
-    
 
     %% Compute stage constraint matrices and vector
-%     [Dt,Et,bt]=genStageConstraints(A,B,D,[],constraints,ul,uh);
+%     DA = D*A;
+%     DB = D*B;
+%     I = eye(size(B,2));
+%     O = zeros(size(B,2),size(A,2));
+%     Dt = [DA; O; O];
+%     Et = [DB; I; -I];
+%     bt = [ch; uh; -ul];  
+    [Dt,Et,bt]=genStageConstraints(A,B,D,cl,ch,ul,uh);
+    %% Compute trajectory constraints matrices and vector
+    [DD,EE,bb]=genTrajectoryConstraints(Dt,Et,bt,N);
+
+    %% Compute QP constraint matrices
+    [Gamma,Phi] = genPrediction(A,B,N); % get prediction matrices:
+    [F,J,L]=genConstraintMatrices(DD,EE,Gamma,Phi,N);
+
+    %% Compute QP cost matrices
+    [H,G]=genCostMatrices(Gamma,Phi,Q,R,P,N);
+    
+    %% Prepare cost and constraint matrices for mpcqpsolver
+    H = chol(H,'lower');
+    H=H\eye(size(H));    
+    
+    param.H1 = H;
+    param.G1 = G;    
+    param.F1 = F;
+    param.J1 = J;
+    param.L1 = L;
+    param.bb1 = bb;
+%%  c2
+    %% Construct constraint matrix D
+    % General form
+    D = zeros(size(c2,1) + 2, 8);
+    ch = zeros(size(c2,1) + 2, 1);        
+    
+    for i = 1:size(c2,1)
+        i2 = mod(i+1,size(c2,1));
+        if i2 == 0
+            i2 = size(c2,1);
+        end        
+        if c2(i,1) > c2(i2,1)
+            modifier = -1;
+            c1y = c2(i,2) + ltol;
+            c2y = c2(i2,2) + ltol;
+        else
+            modifier = 1;
+            c1y = c2(i,2) - utol;
+            c2y = c2(i2,2) - utol;            
+        end
+        coeff = polyfit([c2(i,1), c2(i2,1)], [c1y, c2y], 1);
+        D(i,1) = coeff(1) * modifier*(-1);
+        D(i,3) = modifier;     
+        ch(i) = modifier * coeff(2);
+    end
+    angleConstraint = 2*pi/180; % in radians
+    D(end-1,5) = 1;      ch(end-1) = angleConstraint;
+    D(end,7) = 1;        ch(end) = angleConstraint;  
+
+    %% End of construction        
+    % Input constraints (hard)
+    ul=[-1; -1];
+    uh=[1; 1];
+
+    %% Compute stage constraint matrices and vector
     DA = D*A;
     DB = D*B;
     I = eye(size(B,2));
@@ -78,29 +185,21 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
 
     %% Compute QP cost matrices
     [H,G]=genCostMatrices(Gamma,Phi,Q,R,P,N);
-
-%     %% Compute matrices and vectors for soft constraints
-%     % Define weights for constraint violations
-%     rho = 1e3; % weight for exact penalty term
-%     S = 1e-3*eye(size(D,1)); % small positive definite quadratic cost to ensure uniqueness
-%     [Hs,gs,Fs,bs,Js,Ls] = genSoftPadding(H,F,bb,J,L,S,rho,size(B,2));
-% 
-%     %% replace matrices and vectors to simplify code
-%     H = Hs; F = Fs; bb = bs; J = Js; L = Ls;
-%     param.gs = gs;
+    
     %% Prepare cost and constraint matrices for mpcqpsolver
     H = chol(H,'lower');
     H=H\eye(size(H));    
     
-    param.H = H;
-    param.G = G;    
-    param.F = F;
-    param.J = J;
-    param.L = L;
-    param.bb = bb;
-    
+    param.H2 = H;
+    param.G2 = G;    
+    param.F2 = F;
+    param.J2 = J;
+    param.L2 = L;
+    param.bb2 = bb;
+%%  Rest of code
     param.A = A;
     param.C = C;
+                     
 end % End of mySetup
 
 
@@ -108,3 +207,4 @@ end % End of mySetup
 
 
 %% Modify the following function for your target generation
+

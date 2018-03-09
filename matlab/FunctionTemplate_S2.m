@@ -1,16 +1,3 @@
-%% Modify the following function for your setup function
-% DONE #############################################################
-% IDEA: take c in pieces and work on optimising a route piece by piece.
-% Then, for all but the last set of constraints, apply a weak penalty on 
-% the final position. This way, the controller will not spend too long
-% trying to perfectly fit intermediary positions before moving on.
-% ##################################################################
-% NEXT STEPS:
-% Soft constraints on shape 2. make the constraints the middle path through
-% the shape, and then let the soft constraints permit the system to deviate
-% slightly.
-% TRY SETTING X_HAT TO THE COORDINATES OF THE PENDULUM RATHER THAN THAT OF
-% THE CART!!
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     trackwidth = c(2,2) - c(5,2);
     utol = 0.15*trackwidth; ltol = 0.15*trackwidth;
@@ -24,7 +11,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     % This is a sample way to send reference points
     % Set targets
     offsetTP1 = [0.0 0.0];
-    param.TP1 = midpoint*(c(2,:)+offsetTP1) + (1-midpoint)*(c(5,:)+offsetTP1);
+    param.TP1 = [0 0]; % assigned in splitline
     param.TP2 = targetPoint;
     
     param.rTol = eps_r;
@@ -42,13 +29,50 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
 
     R = eye(2)*0.01; % very small penalty on input to demonstrate hard constraints
     P = Q; % terminal weight
-
+    
+    %% Find splitting line
+    ctmp = [c, zeros(size(c,1),1)];
+    switch_line = [0 0];
+    c1 = zeros(4,2);
+    c2 = zeros(4,2);
+    for i = 1:size(ctmp,1)
+        i0 = mod(i,size(c,1)); i0(i0==0) = 6;
+        i1 = mod(i+1,size(c,1)); i1(i1==0) = 6;
+        i2 = mod(i+2,size(c,1)); i2(i2==0) = 6;
+        i3 = mod(i+3,size(c,1)); i3(i3==0) = 6;
+        i4 = mod(i+4,size(c,1)); i4(i4==0) = 6;
+        i5 = mod(i+5,size(c,1)); i5(i5==0) = 6;
+        i6 = mod(i+6,size(c,1)); i6(i6==0) = 6;
+        
+        l1 = ctmp(i1,:) - ctmp(i,:);
+        l2 = ctmp(i2,:) - ctmp(i1,:);
+        cp = cross(l1,l2);
+        if min(cp) >= 0
+            if c(i1,1) == c(i4,1)
+                switch_line = polyfit([c(i1,1), c(i4,1)], [c(i1,2), c(i4,2)],1);  
+                switch_line(1) = -10e10;
+                switch_line(2) = c(i1,2) - switch_line(1)*c(i1,1);
+            else
+                switch_line = polyfit([c(i1,1), c(i4,1)], [c(i1,2), c(i4,2)],1);  
+            end
+            disp(i)
+            c2 = c([i0,i1,i4,i5],:);
+            c1 = c([i1,i2,i3,i4],:);
+            param.TP1 = midpoint*(c(i1,:)+offsetTP1) + (1-midpoint)*(c(i4,:)+offsetTP1);
+        end
+    end
+    param.switch_line = switch_line;
+    if startingPoint(2) > switch_line(1)*startingPoint(1) + switch_line(2)
+        param.toggle = -1;
+    else
+        param.toggle = 1;
+    end
     %% Split shape into 2 quadrilaterals
-    c1 = c([1 2 5 6], :);
-    c2 = c([2 3 4 5], :);
+%     c1 = c([1 2 5 6], :);
+%     c2 = c([2 3 4 5], :);
     % Skew the midpoint so that it doesn't have infinite gradient
-    c1(3,1) = c1(3,1) + 0.02;
-    c2(4,1) = c2(4,1) - 0.02;
+%     c1(3,1) = c1(3,1) + 0.02;
+%     c2(4,1) = c2(4,1) - 0.02;
 %%  c1
     %% Construct constraint matrix D
     % General form
@@ -76,17 +100,20 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     end    
     D(end-1,5) = 1;      ch(end-1) = angleConstraint;
     D(end,7) = 1;        ch(end) = angleConstraint;  
-
+    cl = -inf*ones(size(ch));
+    cl(end-1) = -angleConstraint;
+    cl(end) = -angleConstraint;
     %% End of construction        
 
     %% Compute stage constraint matrices and vector
-    DA = D*A;
-    DB = D*B;
-    I = eye(size(B,2));
-    O = zeros(size(B,2),size(A,2));
-    Dt = [DA; O; O];
-    Et = [DB; I; -I];
-    bt = [ch; uh; -ul];    
+%     DA = D*A;
+%     DB = D*B;
+%     I = eye(size(B,2));
+%     O = zeros(size(B,2),size(A,2));
+%     Dt = [DA; O; O];
+%     Et = [DB; I; -I];
+%     bt = [ch; uh; -ul];  
+    [Dt,Et,bt]=genStageConstraints(A,B,D,cl,ch,ul,uh);
     %% Compute trajectory constraints matrices and vector
     [DD,EE,bb]=genTrajectoryConstraints(Dt,Et,bt,N);
 
@@ -180,6 +207,7 @@ end % End of mySetup
 
 
 %% Modify the following function for your target generation
+
 function r = myTargetGenerator(x_hat, param)
 
     %% Do not delete this line
@@ -189,7 +217,7 @@ function r = myTargetGenerator(x_hat, param)
     % This is the block in which I have full control over how i decide where the crane
     % should go.
     % Make the crane go to (xTar, yTar)
-    if x_hat(1) < param.x_star
+    if param.toggle*x_hat(3) < param.toggle*(x_hat(1)*param.switch_line(1) + param.switch_line(2))        
         r(1,1) = param.TP1(1);
         r(3,1) = param.TP1(2);
     else
@@ -239,7 +267,7 @@ function u = myMPController(r, x_hat, param)
     opt.FeasibilityTol = 1e-3;
     opt.DataType = 'double';    
     %% Check if we crossed the turning point yet
-    if x_hat(1) < param.x_star
+    if param.toggle*x_hat(3) < param.toggle*(x_hat(1)*param.switch_line(1) + param.switch_line(2))
         w = x_hat(1:8) - r(1:8);
         f = w'*param.G1';
         b = -(param.bb1 + param.J1*x_hat(1:8) + param.L1*r(1:8));

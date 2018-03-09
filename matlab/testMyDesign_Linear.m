@@ -1,7 +1,7 @@
 clear variables
 close all
 
-testShape = 1;
+testShape = 2;
 
 
 %% Create the test shape
@@ -85,10 +85,10 @@ numSamples = T/Ts;
 allContTime = [];
 
 % Iterate for the simulation time
+ctr = 1;
 for t=0:Ts:T
     waitbar(t/T,hw,'Please wait...');
-    tic;
-
+    tic
     % Call the state estimator
     x_hat = myStateEstimator(u, y, param);
     
@@ -96,10 +96,12 @@ for t=0:Ts:T
     ref = myTargetGenerator(x_hat, param);
     
     % Call the controller function
-    u = myMPController(ref, x_hat, param);
-    
+    u = myMPController(ref, x_hat, param);    
     contTime=toc;
-
+%     if max(abs(u)) > 0.001
+%         disp([u' ctr])
+%         ctr = ctr+1;
+%     end
     % Simulate
     [y, tt, xx] = lsim(sysd, [u';0 0], [0 Ts], x(:,end));
 
@@ -132,7 +134,8 @@ GantryCraneOutput.signals.values = x;
 GantryCraneInput.signals.values = u_all';
 
 analyzeCourse( GantryCraneOutput, testShape, c, r, startingPoint, targetPoint );
-
+h = circle(targetPoint(1),targetPoint(2),eps_t);
+plot(h(:,1),h(:,2),'g');
 %% Visualize the performance
 ul=[-1; -1];
 uh=[1; 1];

@@ -6,8 +6,8 @@ load('Params_Simscape.mat');
 load('SSmodelParams.mat');
 
 %% Set flag to use hard or soft constraints
-hardConstraints=1; % use hard constraints
-% hardConstraints=0; % use soft constraints
+% hardConstraints=1; % use hard constraints
+hardConstraints=0; % use soft constraints
 
 %% Set sample period and prediction horizon
 Ts=1/10;
