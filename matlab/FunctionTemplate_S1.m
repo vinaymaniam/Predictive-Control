@@ -39,7 +39,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
         K_lqr = -((B'*P*B + R)^-1)*B'*P*A;
         param.K_lqr = K_lqr;
     else
-        param.K_lqr = 0;
+        param.K_lqr = zeros(2,8);
     end
     %% Construct constraint matrix D
     % General form
@@ -223,8 +223,10 @@ function u = myMPController(r, x_hat, param)
         %% your remaining code here
         if param.mod == 1
 %             ubar = param.M1*param.M2*x_hat(1:8) + param.M1*ubar;
-            ubar = param.K_lqr*x_hat(1:8) + ubar(1:2);
+            v = param.K_lqr*x_hat(1:8) + ubar(1:2);
+        else
+            v = ubar(1:2);
         end
-        u = ubar(1:2);
+        u = v;
     end
 end % End of myMPController

@@ -10,7 +10,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     param.x_star = c(2,1) - 0.01;  
     % This is a sample way to send reference points
     % Set targets
-    offsetTP1 = [0.0 0.0];
+    offsetTP1 = [0.01 0.01];
     param.TP1 = [0 0]; % assigned in splitline
     param.TP2 = targetPoint;
     
@@ -25,7 +25,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     [A,B,C,~] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vm,Ts);    
     %% Declare penalty matrices and tune them here:
 %     Q = diag([10 0 10 0 0 0 0 0]);
-    Q = diag([1 0 1 0 1 0 1 0]);
+    Q = diag([2 0 2 0 1 0 1 0]);
 
     R = eye(2)*0.01; % very small penalty on input to demonstrate hard constraints
     P = Q; % terminal weight
@@ -49,7 +49,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
         cp = cross(l1,l2);
         if min(cp) >= 0
             if c(i1,1) == c(i4,1)
-                switch_line = polyfit([c(i1,1), c(i4,1)], [c(i1,2), c(i4,2)],1);  
+%                 switch_line = polyfit([c(i1,1), c(i4,1)], [c(i1,2), c(i4,2)],1);  
                 switch_line(1) = -10e10;
                 switch_line(2) = c(i1,2) - switch_line(1)*c(i1,1);
             else
@@ -58,7 +58,20 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
             disp(i)
             c2 = c([i0,i1,i4,i5],:);
             c1 = c([i1,i2,i3,i4],:);
-            param.TP1 = midpoint*(c(i1,:)+offsetTP1) + (1-midpoint)*(c(i4,:)+offsetTP1);
+            %make c1 and c2 rectangles
+            l1 = polyfit([c(i1,1),c(i2,1)],[c(i1,2),c(i2,2)],1);
+            l2 = polyfit([c(i4,1),c(i5,1)],[c(i4,2),c(i5,2)],1);
+            xval = (l2(2)-l1(2))/(l1(1)-l2(1));
+            yval = l1(1)*xval + l1(2);
+            pt1 = [xval, yval];
+            l1 = polyfit([c(i1,1),c(i6,1)],[c(i1,2),c(i6,2)],1);
+            l2 = polyfit([c(i3,1),c(i4,1)],[c(i3,2),c(i4,2)],1);
+            xval = (l2(2)-l1(2))/(l1(1)-l2(1));
+            yval = l1(1)*xval + l1(2);
+            pt2 = [xval, yval];
+            c1(1,:) = pt1;
+            c2(2,:) = pt2;            
+            param.TP1 = midpoint*(c1(1,:)) + (1-midpoint)*(c1(4,:));
         end
     end
     param.switch_line = switch_line;
@@ -106,13 +119,6 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     %% End of construction        
 
     %% Compute stage constraint matrices and vector
-%     DA = D*A;
-%     DB = D*B;
-%     I = eye(size(B,2));
-%     O = zeros(size(B,2),size(A,2));
-%     Dt = [DA; O; O];
-%     Et = [DB; I; -I];
-%     bt = [ch; uh; -ul];  
     [Dt,Et,bt]=genStageConstraints(A,B,D,cl,ch,ul,uh);
     %% Compute trajectory constraints matrices and vector
     [DD,EE,bb]=genTrajectoryConstraints(Dt,Et,bt,N);
@@ -220,6 +226,7 @@ function r = myTargetGenerator(x_hat, param)
     if param.toggle*x_hat(3) < param.toggle*(x_hat(1)*param.switch_line(1) + param.switch_line(2))        
         r(1,1) = param.TP1(1);
         r(3,1) = param.TP1(2);
+%         fprintf('Not Switched')
     else
         condition = (abs(x_hat(1) - param.TP2(1)) < param.tTol) &...
                     (abs(x_hat(3) - param.TP2(2)) < param.tTol) &...
@@ -233,6 +240,7 @@ function r = myTargetGenerator(x_hat, param)
             r(1,1) = param.TP2(1);
             r(3,1) = param.TP2(2);
         end
+%         fprintf('Switched')
     end   
 end % End of myTargetGenerator
 
