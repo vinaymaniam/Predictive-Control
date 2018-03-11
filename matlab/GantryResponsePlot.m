@@ -1,4 +1,4 @@
-function GantryResponsePlot(t,input,output,ul,uh,cl,ch,constId,xTarget,figureTitle)
+function GantryResponsePlot(t,input,output,ul,uh,cl,ch,constId,xTarget,figureTitle, eps_r, eps_t)
 % GantryResponsePlot(t,input,output,ul,uh,cl,ch,constId,xTarget,figureTitle)
 % Plots the output of the gantry crane system together witht the usual
 % input and output constraints. Calculates settling time to the xTarget
@@ -12,7 +12,8 @@ function GantryResponsePlot(t,input,output,ul,uh,cl,ch,constId,xTarget,figureTit
 allTitles=[{'X'},{'dX/dt'},{'Y'},{'dY/dt'},{'\theta'},{'d\theta/dt'},{'\psi'},{'d\psi/dt'}];
 subplotid=[1 3 5 7 2 4 6 8];
 info=lsiminfo(output,t,xTarget);
-settlingTime=extractfield(info, 'SettlingTime');
+%settlingTime=extractfield(info, 'SettlingTime');
+settlingTime = GetSettlingTime(t, output, xTarget([1 3]), eps_r, eps_t);
 
 figure('Name',figureTitle);
 for ii=1:8

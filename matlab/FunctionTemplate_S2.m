@@ -1,3 +1,6 @@
+% NEED TO CHOOSE PARAM.K_LIN
+
+
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     trackwidth = c(2,2) - c(5,2);
     utol = 0.15*trackwidth; ltol = 0.15*trackwidth;
@@ -20,12 +23,12 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     
     load CraneParameters;
     Ts=1/20;
-    Tf=2; % duration of prediction horizon in seconds
+    Tf=1.5; % duration of prediction horizon in seconds
     N=ceil(Tf/Ts);
     [A,B,C,~] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vm,Ts);    
     %% Declare penalty matrices and tune them here:
 %     Q = diag([10 0 10 0 0 0 0 0]);
-    Q = diag([2 0 2 0 1 0 1 0]);
+    Q = diag([1 0 1 0 1 0.01 1 0.01]);
 
     R = eye(2)*0.01; % very small penalty on input to demonstrate hard constraints
     P = Q; % terminal weight
@@ -205,6 +208,9 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
 %%  Rest of code
     param.A = A;
     param.C = C;
+    
+    param.K_lin = [1 0 0 0 0 0 0 0;
+                   0 0 1 0 0 0 0 0];
                      
 end % End of mySetup
 
@@ -228,8 +234,8 @@ function r = myTargetGenerator(x_hat, param)
         r(3,1) = param.TP1(2);
 %         fprintf('Not Switched')
     else
-        condition = (abs(x_hat(1) - param.TP2(1)) < param.tTol) &...
-                    (abs(x_hat(3) - param.TP2(2)) < param.tTol) &...
+        radius = sqrt((abs(x_hat(1) - param.TP2(1)))^2+(abs(x_hat(3) - param.TP2(2)))^2);
+        condition = (radius < param.tTol) &...
                     (abs(x_hat(2)) < param.rTol) &...
                     (abs(x_hat(4)) < param.rTol)&...
                     (abs(x_hat(6)) < param.rTol)&...
@@ -280,11 +286,17 @@ function u = myMPController(r, x_hat, param)
         f = w'*param.G1';
         b = -(param.bb1 + param.J1*x_hat(1:8) + param.L1*r(1:8));
         [v, ~, ~, ~] = mpcqpsolver(param.H1, f', -param.F1, b, [], zeros(0,1), false(size(param.bb1)), opt);        
+        u = v(1:2);
     else
-        w = x_hat(1:8) - r(1:8);
-        f = w'*param.G2';
-        b = -(param.bb2 + param.J2*x_hat(1:8) + param.L2*r(1:8));
-        [v, ~, ~, ~] = mpcqpsolver(param.H2, f', -param.F2, b, [], zeros(0,1), false(size(param.bb2)), opt);        
-    end   
-    u = v(1:2);
+        radius = sqrt((abs(x_hat(1) - param.TP2(1)))^2+(abs(x_hat(3) - param.TP2(2)))^2);
+%         if radius < param.tTol
+%             u = param.K_lin*(r(1:8) - x_hat(1:8));
+%         else
+            w = x_hat(1:8) - r(1:8);
+            f = w'*param.G2';
+            b = -(param.bb2 + param.J2*x_hat(1:8) + param.L2*r(1:8));
+            [v, ~, ~, ~] = mpcqpsolver(param.H2, f', -param.F2, b, [], zeros(0,1), false(size(param.bb2)), opt);        
+            u = v(1:2);
+%         end
+    end       
 end % End of myMPController

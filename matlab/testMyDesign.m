@@ -1,7 +1,7 @@
 clear variables
 close all
 
-testShape = 2;
+testShape = 1;
 
 
 %% Create the test shape
@@ -113,4 +113,4 @@ cl=[0; 0];
 ch=[xRange(2); yRange(2)];
 xTarget = [targetPoint(1); 0; targetPoint(2); 0; 0; 0; 0; 0];
 GantryResponsePlot(GantryCraneOutput.time,GantryCraneInput.signals.values,...
-    GantryCraneOutput.signals.values,ul,uh,cl,ch,[1 3],xTarget,'Nonlinear simulation');
+    GantryCraneOutput.signals.values,ul,uh,cl,ch,[1 3],xTarget,'Nonlinear simulation',eps_r,eps_t);

@@ -7,7 +7,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     inputAttenuation = 0.78; % best=0.78
     ul=inputAttenuation*[-1; -1];
     uh=inputAttenuation*[1; 1];
-    Tf=2; % duration of prediction horizon in seconds
+    Tf=1.5; % duration of prediction horizon in seconds
     param.soft = 0; % 0 for hard, 1 for soft
     if param.soft == 0
         angleConstraint = 8*pi/180; % in radians
@@ -15,9 +15,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
         angleConstraint = 2*pi/180; % in radians
     end
 %   END OF CONFIGURATION    
-    % This is a sample way to send reference points
-    param.xTar = targetPoint(1);
-    param.yTar = targetPoint(2);
+    param.TP = targetPoint;
     
     param.rTol = eps_r;
     param.tTol = eps_t;
@@ -75,20 +73,6 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     cl = -inf*ones(size(ch));
     cl(end-1) = -angleConstraint;
     cl(end) = -angleConstraint;
-%     % Remove redundant lines from D <--- didnt really make it faster
-%     idx = lblines(round(lblines(:,1),3) == round(ublines(:,1),3),3);
-%     D2 = D; ch2 = ch; cl2 = cl;
-%     D = []; ch = []; cl = [];
-%     for i=1:size(D2,1)
-%         disp(any(idx == i))
-%         if ~any(idx == i)
-%             D = [D; D2(i,:)];
-%             ch = [ch; ch2(i,:)];
-%             cl = [cl; cl2(i,:)];
-%         else
-%             cl = [cl; -lblines(lblines(:,3)==i,2)];
-%         end            
-%     end
     
     %% End of construction        
     
@@ -160,17 +144,8 @@ function r = myTargetGenerator(x_hat, param)
     r = zeros(10,1);
     %%
     % Make the crane go to (xTar, yTar)
-    r(1,1) = param.xTar;
-    r(3,1) = param.yTar;
-%     condition = (abs(x_hat(1) - param.xTar) < param.tTol) &...
-%                 (abs(x_hat(3) - param.yTar) < param.tTol) &...
-%                 (abs(x_hat(2)) < param.rTol) &...
-%                 (abs(x_hat(4)) < param.rTol)&...
-%                 (abs(x_hat(6)) < param.rTol)&...
-%                 (abs(x_hat(8)) < param.rTol);
-%     if condition
-%         r(1:8) = x_hat(1:8);
-%     end
+    r(1,1) = param.TP(1);
+    r(3,1) = param.TP(2);
 end % End of myTargetGenerator
 
 
@@ -197,8 +172,8 @@ function u = myMPController(r, x_hat, param)
     % Create the output array of the appropriate size
     u = zeros(2,1);
     %% Check if crane is at target point
-    condition = (abs(x_hat(1) - param.xTar) < param.tTol) &...
-                (abs(x_hat(3) - param.yTar) < param.tTol) &...
+    radius = sqrt((abs(x_hat(1) - param.TP(1)))^2+(abs(x_hat(3) - param.TP(2)))^2);
+    condition = (radius < param.tTol) &...
                 (abs(x_hat(2)) < param.rTol) &...
                 (abs(x_hat(4)) < param.rTol)&...
                 (abs(x_hat(6)) < param.rTol)&...
