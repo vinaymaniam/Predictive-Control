@@ -1,7 +1,7 @@
 clear variables
 close all
 
-testShape = 1;
+testShape = 2;
 
 
 %% Create the test shape
@@ -135,7 +135,7 @@ GantryCraneInput.signals.values = u_all';
 
 analyzeCourse( GantryCraneOutput, testShape, c, r, startingPoint, targetPoint );
 h = circle(targetPoint(1),targetPoint(2),eps_t);
-plot(h(:,1),h(:,2),'g');
+plot(h(:,1),h(:,2),'k');
 %% Visualize the performance
 ul=[-1; -1];
 uh=[1; 1];

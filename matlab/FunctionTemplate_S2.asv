@@ -1,4 +1,4 @@
-% tbenchmin = 0.2926
+
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     trackwidth = sqrt(sum((c(2,:) - c(5,:)).^2));    
     utol = 0.15*trackwidth; ltol = 0.15*trackwidth;
@@ -30,9 +30,9 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     end
     R = eye(2)*0.003; % very small penalty on input to demonstrate hard constraints
     P = Q; % terminal weight
-    %% Smart Choice of P
-    [K,~,~] = dlqr(A, B, Q, R);
-%     P = dlyap((A-B*K)', Q + K'*R*K);
+    %% Smart Choice of K
+    K = dlqr(A, B, Q, R);
+    P = dlyap((A+B*K)', 
     %% Find splitting line to separate 2 rectangles
     ctmp = [c, zeros(size(c,1),1)];
     switch_line = [0 0];
@@ -276,7 +276,8 @@ function u = myMPController(r, x_hat, param)
     persistent iA;
     if isempty(iA)
         iA = false(size(param.bb2));
-    end    
+    end
+    iA = false(size(param.bb2));
     
     %% Check if we crossed the turning point yet
     if param.toggle*x_hat(3) < param.toggle*(x_hat(1)*param.switch_line(1) + param.switch_line(2))

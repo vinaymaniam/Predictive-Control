@@ -1,7 +1,7 @@
 clear variables
 close all
 
-testShape = 2;
+testShape = 1;
 
 
 %% Create the test shape
@@ -17,9 +17,9 @@ switch ( testShape )
              0.25, 0.30;
              0.50, 0.05;
              0.45, 0.00;
-             0.25, 0.20
+             0.25, 0.20;
              0.05, 0.00];
-%         c = shape([0.05 0.05], [0.45, 0.05], 0.04, [0.25 0.25], 0);
+        c = shape([0.05 0.05], [0.45, 0.05], 0.01, [0.25 0.25], 0);       
 end
 
 
@@ -105,7 +105,7 @@ sim(simModel);
 %% Visualize the Course
 analyzeCourse( GantryCraneOutput, testShape, c, r, startingPoint, targetPoint );
 h = circle(targetPoint(1),targetPoint(2),eps_t);
-plot(h(:,1),h(:,2),'g');
+plot(h(:,1),h(:,2),'k');
 
 %% Visualize the performance
 ul=[-1; -1];

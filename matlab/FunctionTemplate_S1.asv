@@ -1,8 +1,9 @@
+%% Modify the following function for your setup function
+
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
 %%  Configure here
     param.mod = 0; % 0 = NO MOD, 1 = OFFSET BLOCKING
-    trackwidth = sqrt(sum((c(2,:) - c(3,:)).^2));    
-    tol = 0.1*trackwidth;    
+    tol = 0.01;    
     inputAttenuation = 1;%0.78; % best=0.78
     ul=inputAttenuation*[-1; -1];
     uh=inputAttenuation*[1; 1];    
@@ -11,7 +12,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     param.useDistRej = 0; % 0 for no disturbance rejection    
     
     if param.soft == 0
-        angleConstraint = 2*pi/180; % in radians
+        angleConstraint = 8*pi/180; % in radians
     else
         angleConstraint = 2*pi/180; % in radians
     end
@@ -25,7 +26,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     
     load CraneParameters;
     Ts=1/20;    
-    Tf=2; % duration of prediction horizon in seconds
+    Tf=1.5; % duration of prediction horizon in seconds
     N=ceil(Tf/Ts);
     [A,B,C,~] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vm,Ts);  
     param.A = A;
@@ -40,9 +41,6 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     end
     R=eye(2)*0.003; % very small penalty on input to demonstrate hard constraints
     P=Q; % terminal weight
-    %% Smart Choice of P
-    [K,~,~] = dlqr(A, B, Q, R);
-    P = dlyap((A-B*K)', Q + K'*R*K);    
     if param.mod == 1
         % Ricatti Thing    
         [P,~,~] = dare(A,B,Q,R);
@@ -142,8 +140,8 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     param.bb = bb;
     
     %% Disturbance Rejection stuff
-    Cd = 0.01*eye(8);
-    Bd = 0.01*eye(8);
+    Cd = eye(8);
+    Bd = zeros(8);
     Hdr = eye(8);
     Mdrd = Hdr * Cd;
     Mdr = Hdr * C;
@@ -154,13 +152,12 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     param.Adr = [A,                Bd;
                  zeros(size(A,1)), eye(size(A,1))];
     param.Bdr = [B; zeros(8,2)];
-    
-    Ct = [param.C, Cd]';
-    Qt = 0.1*eye(16);
-    Rv = 0.1*eye(8); 
-    [Sigma,~,~] = dare(param.Adr',Ct,Qt,Rv);
-    param.Ldr = param.Adr'*Sigma*Ct/((Ct'*Sigma*Ct + Rv));
-    param.Cd = Cd;
+    Cti
+    [Sigma,~,~] = dare(param.Adr,[param.C, param.Cd],Q,R);
+    param.Ldr = param.Adr*Sigma*[param.C, param.Cd]'
+%     L1 = zeros(8); L1(8,8) = 1;
+%     L2 = eye(8);
+%     param.Ldr = [L1; L2];    
     param.startingPoint = startingPoint;
 end % End of mySetup
 
@@ -169,3 +166,93 @@ end % End of mySetup
 
 
 %% Modify the following function for your target generation
+function r = myTargetGenerator(x_hat, param)
+    %% Do not delete this line
+    % Create the output array of the appropriate size
+    r = zeros(10,1);
+    %%
+    % Make the crane go to (xTar, yTar)
+    r(1,1) = param.TP(1);
+    r(3,1) = param.TP(2);
+    if param.useDistRej
+        r = param.DR1\(param.DR2*[x_hat(9:16); r]);
+    end
+    
+end % End of myTargetGenerator
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+%% Modify the following function for your state estimator (if desired)
+function x_hat = myStateEstimator(u, y, param)
+
+    %% Do not delete this line
+    % Create the output array of the appropriate size
+    x_hat = zeros(16,1);
+    %% Pendulum is assumed to be of length 0.47m
+    x_hat(1:8) = param.C\y;    
+    %% Disturbance Rejection
+    persistent state;     
+    if isempty(state)
+        state = zeros(16,1);
+        state(1) = param.startingPoint(1);
+        state(3) = param.startingPoint(2);
+    else
+        if param.useDistRej == 1                                          
+            state = param.Adr * state + param.Bdr*u +...
+                param.Ldr*(y - [param.C, param.Cd]*state);
+        end
+    end
+    if param.useDistRej == 1
+        x_hat = state;
+    end
+end % End of myStateEstimator
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+%% Modify the following function for your controller
+function u = myMPController(r, x_hat, param)
+    %% Do not delete this line
+    % Create the output array of the appropriate size
+    u = zeros(2,1);
+    %% Check if crane is at target point
+    radius = sqrt((abs(x_hat(1) - param.TP(1)))^2+(abs(x_hat(3) - param.TP(2)))^2);
+    condition = (radius < param.tTol) &...
+                (abs(x_hat(2)) < param.rTol) &...
+                (abs(x_hat(4)) < param.rTol)&...
+                (abs(x_hat(6)) < param.rTol)&...
+                (abs(x_hat(8)) < param.rTol);
+%     condition = 0; % Leave the condition to be handled by target gen
+    persistent iA;
+    if isempty(iA)
+        iA = false(size(param.bb));
+    end
+    if ~condition    
+        %% MPC Controller
+        opt = mpcqpsolverOptions;
+        opt.IntegrityChecks = false;%% for code generation
+        opt.FeasibilityTol = 1e-3;
+        opt.DataType = 'double';
+        %% your code starts here            
+        % Cholksey and inverse already computed and stored in H
+        w = x_hat(1:8) - r(1:8);
+        if param.soft == 0
+            f = w'*param.G'; % Hard
+        else            
+            f = [w'*param.G', param.gs']; % Soft
+        end
+        b = -(param.bb + param.J*x_hat(1:8) + param.L*r(1:8));
+        [ubar, ~, iA, ~] = mpcqpsolver(param.H, f', -param.F, b, [], zeros(0,1), iA, opt);
+        %% your remaining code here
+        if param.mod == 1
+%             ubar = param.M1*param.M2*x_hat(1:8) + param.M1*ubar;
+            v = param.K_lqr*x_hat(1:8) + ubar(1:2);
+        else
+            v = ubar(1:2);
+        end
+        u = v;
+    end
+end % End of myMPController
