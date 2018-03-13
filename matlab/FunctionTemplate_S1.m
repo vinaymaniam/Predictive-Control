@@ -4,11 +4,13 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
 %%  Configure here
     param.mod = 0; % 0 = NO MOD, 1 = OFFSET BLOCKING
     tol = 0.01;    
-    inputAttenuation = 0.78; % best=0.78
+    inputAttenuation = 1;%0.78; % best=0.78
     ul=inputAttenuation*[-1; -1];
-    uh=inputAttenuation*[1; 1];
-    Tf=1.5; % duration of prediction horizon in seconds
+    uh=inputAttenuation*[1; 1];    
     param.soft = 0; % 0 for hard, 1 for soft
+    
+    useDistRej = 0; % 0 for no disturbance rejection    
+    
     if param.soft == 0
         angleConstraint = 8*pi/180; % in radians
     else
@@ -24,12 +26,30 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     
     load CraneParameters;
     Ts=1/20;    
+    Tf=1.5; % duration of prediction horizon in seconds
     N=ceil(Tf/Ts);
-    [A,B,C,~] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vm,Ts);    
+    [A,B,C,~] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vm,Ts);  
+    %% Disturbance Rejection
+    if useDistRej
+        nd = 8; % number of features used to model disturbance
+        Bd = [eye(nd); zeros(size(A,1)-nd,nd)];
+        A = [A,                             Bd; 
+             zeros(size(Bd,2), size(A,2)),  eye(size(Bd,2))];
+        B = [B; zeros(size(Bd,2),size(B,2))];
+        Cd = [eye(nd); zeros(size(C,1)-nd, nd)];
+        C = [C, Cd];
+        xsz = 8 + nd;
+    else
+        xsz = 8;
+    end
+    
     %% Declare penalty matrices and tune them here:
-    Q=zeros(8);
-    Q = diag([10,0,10,0,50,0,50,0]);
-    R=eye(2)*0.01; % very small penalty on input to demonstrate hard constraints
+    Q=zeros(xsz);
+    penalties = [10,0,10,0,50,0,50,0];
+    for i = 1:length(penalties)
+        Q(i,i) = penalties(i);
+    end
+    R=eye(2)*0.003; % very small penalty on input to demonstrate hard constraints
     P=Q; % terminal weight
     if param.mod == 1
         % Ricatti Thing    
@@ -41,7 +61,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     end
     %% Construct constraint matrix D
     % General form
-    D = zeros(size(c,1) + 2, 8);
+    D = zeros(size(c,1) + 2, xsz);
     ch = zeros(size(c,1) + 2, 1);       
     lblines = [];
     ublines = [];

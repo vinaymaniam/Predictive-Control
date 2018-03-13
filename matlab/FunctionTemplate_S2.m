@@ -1,19 +1,14 @@
-% NEED TO CHOOSE PARAM.K_LIN
-
 
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
-    trackwidth = c(2,2) - c(5,2);
+    trackwidth = sqrt(sum((c(2,:) - c(5,:)).^2));    
     utol = 0.15*trackwidth; ltol = 0.15*trackwidth;
-    angleConstraint = 2*pi/180; % in radians
-    midpoint = 0.5; % distance between 2 mid points to set 1st target
+    angleConstraint = 8*pi/180; % in radians
+    midpoint = 0.7; % distance between 2 mid points to set 1st target
     % Input constraints (hard)
-    inputAttenuation = 0.8;
+    inputAttenuation = 1;
     ul=inputAttenuation*[-1; -1];
-    uh=inputAttenuation*[1; 1];    
-    param.x_star = c(2,1) - 0.01;  
-    % This is a sample way to send reference points
+    uh=inputAttenuation*[1; 1];     
     % Set targets
-    offsetTP1 = [0.01 0.01];
     param.TP1 = [0 0]; % assigned in splitline
     param.TP2 = targetPoint;
     
@@ -28,12 +23,15 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     [A,B,C,~] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vm,Ts);    
     %% Declare penalty matrices and tune them here:
 %     Q = diag([10 0 10 0 0 0 0 0]);
-    Q = diag([1 0 1 0 1 0.01 1 0.01]);
-
-    R = eye(2)*0.01; % very small penalty on input to demonstrate hard constraints
+    Q = zeros(8);
+    penalties = [10,0,10,0,50,0,50,0];
+    for i = 1:length(penalties)
+        Q(i,i) = penalties(i);
+    end
+    R = eye(2)*0.003; % very small penalty on input to demonstrate hard constraints
     P = Q; % terminal weight
     
-    %% Find splitting line
+    %% Find splitting line to separate 2 rectangles
     ctmp = [c, zeros(size(c,1),1)];
     switch_line = [0 0];
     c1 = zeros(4,2);
@@ -58,10 +56,10 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
             else
                 switch_line = polyfit([c(i1,1), c(i4,1)], [c(i1,2), c(i4,2)],1);  
             end
-            disp(i)
+            param.TP1 = midpoint*(c(i1,:)) + (1-midpoint)*(c(i4,:));
             c2 = c([i0,i1,i4,i5],:);
             c1 = c([i1,i2,i3,i4],:);
-            %make c1 and c2 rectangles
+            %make c1 and c2 overlapping rectangles rather than trapeziums
             l1 = polyfit([c(i1,1),c(i2,1)],[c(i1,2),c(i2,2)],1);
             l2 = polyfit([c(i4,1),c(i5,1)],[c(i4,2),c(i5,2)],1);
             xval = (l2(2)-l1(2))/(l1(1)-l2(1));
@@ -74,7 +72,6 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
             pt2 = [xval, yval];
             c1(1,:) = pt1;
             c2(2,:) = pt2;            
-            param.TP1 = midpoint*(c1(1,:)) + (1-midpoint)*(c1(4,:));
         end
     end
     param.switch_line = switch_line;
@@ -83,12 +80,6 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     else
         param.toggle = 1;
     end
-    %% Split shape into 2 quadrilaterals
-%     c1 = c([1 2 5 6], :);
-%     c2 = c([2 3 4 5], :);
-    % Skew the midpoint so that it doesn't have infinite gradient
-%     c1(3,1) = c1(3,1) + 0.02;
-%     c2(4,1) = c2(4,1) - 0.02;
 %%  c1
     %% Construct constraint matrix D
     % General form
