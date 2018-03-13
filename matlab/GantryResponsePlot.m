@@ -14,7 +14,8 @@ subplotid=[1 3 5 7 2 4 6 8];
 info=lsiminfo(output,t,xTarget);
 %settlingTime=extractfield(info, 'SettlingTime');
 settlingTime = GetSettlingTime(t, output, xTarget([1 3]), eps_r, eps_t);
-
+[maxval, idx] = max(settlingTime);
+fprintf('Longest settling time = %.2f, channel %i\n', maxval, idx)
 figure('Name',figureTitle);
 for ii=1:8
     subplot(5,2,subplotid(ii))

@@ -3,16 +3,18 @@
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
 %%  Configure here
     param.mod = 0; % 0 = NO MOD, 1 = OFFSET BLOCKING
-    tol = 0.01;    
+    trackwidth = sqrt(sum((c(2,:) - c(3,:)).^2));    
+    tol = 0.15*trackwidth;    
     inputAttenuation = 1;%0.78; % best=0.78
     ul=inputAttenuation*[-1; -1];
     uh=inputAttenuation*[1; 1];    
     param.soft = 0; % 0 for hard, 1 for soft
+    useRatePen = 1;
     
     param.useDistRej = 0; % 0 for no disturbance rejection    
     
     if param.soft == 0
-        angleConstraint = 8*pi/180; % in radians
+        angleConstraint = 4*pi/180; % in radians
     else
         angleConstraint = 2*pi/180; % in radians
     end
@@ -26,7 +28,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     
     load CraneParameters;
     Ts=1/20;    
-    Tf=1.5; % duration of prediction horizon in seconds
+    Tf=2; % duration of prediction horizon in seconds
     N=ceil(Tf/Ts);
     [A,B,C,~] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vm,Ts);  
     param.A = A;
@@ -39,8 +41,12 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     for i = 1:length(penalties)
         Q(i,i) = penalties(i);
     end
+    %% CHANGE TO VERY LOW NUMBER(EG. 0.0001) AND ADD RATE PENALTIES
     R=eye(2)*0.003; % very small penalty on input to demonstrate hard constraints
     P=Q; % terminal weight
+    %% Smart Choice of P
+    [K,~,~] = dlqr(A, B, Q, R);
+    P = dlyap((A-B*K)', Q + K'*R*K);    
     if param.mod == 1
         % Ricatti Thing    
         [P,~,~] = dare(A,B,Q,R);
@@ -99,6 +105,14 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     %% Compute QP cost matrices
     [H,G]=genCostMatrices(Gamma,Phi,Q,R,P,N);
     
+    %% Rate penalties
+    if useRatePen == 1
+        R2 = 0.1*eye(2);
+        T = [zeros(2,(N-1)*2), zeros(2,2);
+             eye((N-1)*2),     zeros((N-1)*2,2)];
+        D
+    end
+    
     if param.soft == 1
         %% Compute matrices and vectors for soft constraints
         % Define weights for constraint violations
@@ -140,8 +154,8 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     param.bb = bb;
     
     %% Disturbance Rejection stuff
-    Cd = eye(8);
-    Bd = zeros(8);
+    Cd = 0.01*eye(8);
+    Bd = 0.01*eye(8);
     Hdr = eye(8);
     Mdrd = Hdr * Cd;
     Mdr = Hdr * C;
@@ -152,12 +166,13 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     param.Adr = [A,                Bd;
                  zeros(size(A,1)), eye(size(A,1))];
     param.Bdr = [B; zeros(8,2)];
-    Cti
-    [Sigma,~,~] = dare(param.Adr,[param.C, param.Cd],Q,R);
-    param.Ldr = param.Adr*Sigma*[param.C, param.Cd]'
-%     L1 = zeros(8); L1(8,8) = 1;
-%     L2 = eye(8);
-%     param.Ldr = [L1; L2];    
+    
+    Ct = [param.C, Cd]';
+    Qt = 0.1*eye(16);
+    Rv = 0.1*eye(8); 
+    [Sigma,~,~] = dare(param.Adr',Ct,Qt,Rv);
+    param.Ldr = param.Adr'*Sigma*Ct/((Ct'*Sigma*Ct + Rv));
+    param.Cd = Cd;
     param.startingPoint = startingPoint;
 end % End of mySetup
 
@@ -175,7 +190,7 @@ function r = myTargetGenerator(x_hat, param)
     r(1,1) = param.TP(1);
     r(3,1) = param.TP(2);
     if param.useDistRej
-        r = param.DR1\(param.DR2*[x_hat(9:16); r]);
+        r = param.DR1\(param.DR2*[x_hat(9:16); r(1:8)]);
     end
     
 end % End of myTargetGenerator

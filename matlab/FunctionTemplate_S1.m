@@ -4,11 +4,12 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
 %%  Configure here
     param.mod = 0; % 0 = NO MOD, 1 = OFFSET BLOCKING
     trackwidth = sqrt(sum((c(2,:) - c(3,:)).^2));    
-    tol = 0.1*trackwidth;    
+    tol = 0.15*trackwidth;    
     inputAttenuation = 1;%0.78; % best=0.78
     ul=inputAttenuation*[-1; -1];
     uh=inputAttenuation*[1; 1];    
     param.soft = 0; % 0 for hard, 1 for soft
+    useRatePen = 1;
     
     param.useDistRej = 0; % 0 for no disturbance rejection    
     
@@ -40,7 +41,8 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     for i = 1:length(penalties)
         Q(i,i) = penalties(i);
     end
-    R=eye(2)*0.003; % very small penalty on input to demonstrate hard constraints
+    %% CHANGE TO VERY LOW NUMBER(EG. 0.0001) AND ADD RATE PENALTIES
+    R=eye(2)*0.0001; % very small penalty on input to demonstrate hard constraints
     P=Q; % terminal weight
     %% Smart Choice of P
     [K,~,~] = dlqr(A, B, Q, R);
@@ -102,6 +104,15 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
 
     %% Compute QP cost matrices
     [H,G]=genCostMatrices(Gamma,Phi,Q,R,P,N);
+    
+    %% Rate penalties
+    if useRatePen == 1
+        R2 = 0.02*eye(2);
+        T = [zeros(2,(N-1)*2), zeros(2,2);
+             eye((N-1)*2),     zeros((N-1)*2,2)];
+        RatePenMat = ((eye(N*2)) - T)'*kron(eye(N),R2)*((eye(N*2)) - T);
+        H = H + 2*RatePenMat;
+    end
     
     if param.soft == 1
         %% Compute matrices and vectors for soft constraints
