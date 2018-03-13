@@ -1,5 +1,9 @@
 % tbenchmin = 0.2926
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
+    %% Choose modifications to use
+    useRatePen = 0;
+
+    %%
     trackwidth = sqrt(sum((c(2,:) - c(5,:)).^2));    
     utol = 0.15*trackwidth; ltol = 0.15*trackwidth;
     angleConstraint = 8*pi/180; % in radians
@@ -24,7 +28,9 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     %% Declare penalty matrices and tune them here:
 %     Q = diag([10 0 10 0 0 0 0 0]);
     Q = zeros(8);
-    penalties = [10,0,10,0,50,0,50,0];
+    penalties = [10,0,10,0,50,0,50,0]; %base form works reasonably well
+    pos = 10; vel = 0; angl = 20; rangl = 0.003;%0.03 no I/P rate pen 
+%     penalties = [pos,vel,pos,vel,angl,rangl,angl,rangl];    
     for i = 1:length(penalties)
         Q(i,i) = penalties(i);
     end
@@ -125,7 +131,14 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
 
     %% Compute QP cost matrices
     [H,G]=genCostMatrices(Gamma,Phi,Q,R,P,N);
-    
+    %% Rate penalties
+    if useRatePen == 1
+        R2 = 0.0003*eye(2);
+        T = [zeros(2,(N-1)*2), zeros(2,2);
+             eye((N-1)*2),     zeros((N-1)*2,2)];
+        RatePenMat = ((eye(N*2)) - T)'*kron(eye(N),R2)*((eye(N*2)) - T);
+        H = H + 2*RatePenMat;
+    end    
     %% Prepare cost and constraint matrices for mpcqpsolver
     H = chol(H,'lower');
     H=H\eye(size(H));    

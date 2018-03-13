@@ -1,17 +1,18 @@
 %% Modify the following function for your setup function
 
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
-%%  Configure here
-    param.mod = 0; % 0 = NO MOD, 1 = OFFSET BLOCKING
+    %% Configure here    
     trackwidth = sqrt(sum((c(2,:) - c(3,:)).^2));    
     tol = 0.15*trackwidth;    
-    inputAttenuation = 1;%0.78; % best=0.78
+    inputAttenuation = 1; % best=0.78
     ul=inputAttenuation*[-1; -1];
     uh=inputAttenuation*[1; 1];    
+    %% Choose which modifications to use
+    param.mod = 0; % 0 = NO MOD, 1 = OFFSET BLOCKING
     param.soft = 0; % 0 for hard, 1 for soft
-    useRatePen = 1;
-    
-    param.useDistRej = 0; % 0 for no disturbance rejection    
+    useRatePen = 1; % 0 for no rate penalties to input    
+    param.useDistRej = 0; % 0 for no disturbance rejection   
+    %%
     
     if param.soft == 0
         angleConstraint = 4*pi/180; % in radians
@@ -37,7 +38,8 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     
     %% Declare penalty matrices and tune them here:
     Q=zeros(8);
-    penalties = [10,0,10,0,50,0,50,0];
+    pos = 10; vel = 0; angl = 20; rangl = 0.003;%0.03 no I/P rate pen 
+    penalties = [pos,vel,pos,vel,angl,rangl,angl,rangl];
     for i = 1:length(penalties)
         Q(i,i) = penalties(i);
     end
@@ -107,7 +109,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     
     %% Rate penalties
     if useRatePen == 1
-        R2 = 0.02*eye(2);
+        R2 = 0.0002*eye(2);
         T = [zeros(2,(N-1)*2), zeros(2,2);
              eye((N-1)*2),     zeros((N-1)*2,2)];
         RatePenMat = ((eye(N*2)) - T)'*kron(eye(N),R2)*((eye(N*2)) - T);
