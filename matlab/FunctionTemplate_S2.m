@@ -30,12 +30,12 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
 %     Q = diag([10 0 10 0 0 0 0 0]);
     Q = zeros(8);
     penalties = [10,0,10,0,50,0,50,0]; %base form works reasonably well
-    pos = 10; vel = 0; angl = 20; rangl = 0.003;%0.03 no I/P rate pen 
-%     penalties = [pos,vel,pos,vel,angl,rangl,angl,rangl];    
+    pos = 2.2; vel = 0; angl = 20; rangl = 0;%0.03 no I/P rate pen 
+    penalties = [pos,vel,pos,vel,angl,rangl,angl,rangl];    
     for i = 1:length(penalties)
         Q(i,i) = penalties(i);
     end
-    R = eye(2)*0.003; % very small penalty on input to demonstrate hard constraints
+    R = eye(2)*0.0001; % very small penalty on input to demonstrate hard constraints
     P = Q; % terminal weight
     %% Smart Choice of P
     [K,~,~] = dlqr(A, B, Q, R);
@@ -134,7 +134,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     [H,G]=genCostMatrices(Gamma,Phi,Q,R,P,N);
     %% Rate penalties
     if useRatePen == 1
-        R2 = 0.0003*eye(2);
+        R2 = 0.0002*eye(2);
         T = [zeros(2,(N-1)*2), zeros(2,2);
              eye((N-1)*2),     zeros((N-1)*2,2)];
         RatePenMat = ((eye(N*2)) - T)'*kron(eye(N),R2)*((eye(N*2)) - T);

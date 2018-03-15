@@ -36,7 +36,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     %% Declare penalty matrices and tune them here:
     Q=zeros(8);
     % penalties = [10,0,10,0,50,0,50,0]; % works pretty well
-    pos = 3; vel = 0; angl = 20; rangl = 0;%0.03 no I/P rate pen 
+    pos = 2.2; vel = 0; angl = 20; rangl = 0;%0.03 no I/P rate pen 
 %     pos = 10; vel = 0; angl = 50; rangl = 0;%0.03 no I/P rate pen 
     penalties = [pos,vel,pos,vel,angl,rangl,angl,rangl];
     for i = 1:length(penalties)
