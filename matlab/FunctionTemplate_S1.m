@@ -67,23 +67,35 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
         i2 = mod(i+1,size(c,1));
         if i2 == 0
             i2 = size(c,1);
-        end        
+        end    
+        normalLine = 1;
         if c(i,1) > c(i2,1)
             modifier = -1;
             c1y = c(i,2) + tol;
             c2y = c(i2,2) + tol;
             coeff = polyfit([c(i,1), c(i2,1)], [c1y, c2y], 1);
             lblines = [lblines; [coeff, i]];
-        else
+        elseif c(i,1) < c(i2,1)
             modifier = 1;
             c1y = c(i,2) - tol;
             c2y = c(i2,2) - tol;    
             coeff = polyfit([c(i,1), c(i2,1)], [c1y, c2y], 1);
             ublines = [ublines; [coeff, i]];
+        else % vertical line
+            normalLine = 0;
+            if c(i,2) < c(i2,2) % line is a left bound
+                D(i,1) = -1;
+                ch(i) = -c(i,1) - tol;
+            else % line is a right bound
+                D(i,1) = 1;
+                ch(i) = c(i,1) - tol;
+            end
         end
-        D(i,1) = coeff(1) * modifier*(-1);
-        D(i,3) = modifier;     
-        ch(i) = modifier * coeff(2);
+        if normalLine == 1
+            D(i,1) = coeff(1) * modifier*(-1);
+            D(i,3) = modifier;     
+            ch(i) = modifier * coeff(2);
+        end
     end    
     D(end-1,5) = 1;      D(end,7) = 1;        
     ch(end-1) = angleConstraint;    

@@ -1,7 +1,7 @@
 clear variables
 close all
 
-testShape = 2;
+testShape = 1;
 
 
 %% Create the test shape
@@ -20,6 +20,7 @@ switch ( testShape )
              0.25, 0.20;
              0.05, 0.00];
 %         c = shape([0.05 0.05], [0.45, 0.05], 0.01, [0.25 0.25], 0);       
+%         c = shape([0.05 0.05], [0.45, 0.45], 0.1, [0.05 0.45], 0);       
 end
 
 

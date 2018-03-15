@@ -11,7 +11,10 @@ switch ( testShape )
              0.45, 0.50;
              0.50, 0.45;
              0.05, 0.00];
-%         c = shape([0.05, 0.4],[0.4,0.4],0.1,0,0);
+%         c = [0.00, 0.45;
+%              0.45, 0.45;
+%              0.45, 0.35;
+%              0.00, 0.35];
     case 2
         c = [0.00, 0.05;
              0.25, 0.30;
@@ -19,13 +22,19 @@ switch ( testShape )
              0.45, 0.00;
              0.25, 0.20
              0.05, 0.00];
+%         c = [0.00, 0.00;
+%              0.00, 0.45;
+%              0.45, 0.45;
+%              0.45, 0.35;
+%              0.10, 0.35;
+%              0.10, 0.00];  
 end
 
 
 %% Some other parameters
 % The starting point
 startingPoint = [0.05, 0.05];
-% startingPoint = [0.05, 0.4];
+%startingPoint = [0.05, 0.4];
 
 % The target point
 switch (testShape)
@@ -33,6 +42,7 @@ switch (testShape)
         targetPoint = [0.4, 0.4];
     case 2
         targetPoint = [0.45, 0.05];
+        %targetPoint = [0.4, 0.4];
 end
 
 % The tolerances

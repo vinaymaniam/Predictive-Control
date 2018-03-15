@@ -30,7 +30,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
 %     Q = diag([10 0 10 0 0 0 0 0]);
     Q = zeros(8);
     penalties = [10,0,10,0,50,0,50,0]; %base form works reasonably well
-    pos = 2.2; vel = 0; angl = 20; rangl = 0;%0.03 no I/P rate pen 
+    pos = 2; vel = 0; angl = 20; rangl = 0;%0.03 no I/P rate pen 
     penalties = [pos,vel,pos,vel,angl,rangl,angl,rangl];    
     for i = 1:length(penalties)
         Q(i,i) = penalties(i);
@@ -59,7 +59,6 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
         cp = cross(l1,l2);
         if min(cp) >= 0
             if c(i1,1) == c(i4,1)
-%                 switch_line = polyfit([c(i1,1), c(i4,1)], [c(i1,2), c(i4,2)],1);  
                 switch_line(1) = -10e10;
                 switch_line(2) = c(i1,2) - switch_line(1)*c(i1,1);
             else
@@ -69,15 +68,35 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
             c2 = c([i0,i1,i4,i5],:);
             c1 = c([i1,i2,i3,i4],:);
             %make c1 and c2 overlapping rectangles rather than trapeziums
-            l1 = polyfit([c(i1,1),c(i2,1)],[c(i1,2),c(i2,2)],1);
-            l2 = polyfit([c(i4,1),c(i5,1)],[c(i4,2),c(i5,2)],1);
-            xval = (l2(2)-l1(2))/(l1(1)-l2(1));
-            yval = l1(1)*xval + l1(2);
+            if c(i1,1) == c(i2,1)
+                xval = c(i1,1);
+                l2 = polyfit([c(i4,1),c(i5,1)],[c(i4,2),c(i5,2)],1);
+                yval = l2(1)*xval + l2(2);
+            elseif c(i4,1) == c(i5,1)
+                xval = c(i4,1);
+                l1 = polyfit([c(i1,1),c(i2,1)],[c(i1,2),c(i2,2)],1);
+                yval = l1(1)*xval + l1(2);
+            else
+                l1 = polyfit([c(i1,1),c(i2,1)],[c(i1,2),c(i2,2)],1);
+                l2 = polyfit([c(i4,1),c(i5,1)],[c(i4,2),c(i5,2)],1);
+                xval = (l2(2)-l1(2))/(l1(1)-l2(1));
+                yval = l1(1)*xval + l1(2);
+            end
             pt1 = [xval, yval];
-            l1 = polyfit([c(i1,1),c(i6,1)],[c(i1,2),c(i6,2)],1);
-            l2 = polyfit([c(i3,1),c(i4,1)],[c(i3,2),c(i4,2)],1);
-            xval = (l2(2)-l1(2))/(l1(1)-l2(1));
-            yval = l1(1)*xval + l1(2);
+            if c(i1,1) == c(i6,1)
+                xval = c(i1,1);
+                l2 = polyfit([c(i3,1),c(i4,1)],[c(i3,2),c(i4,2)],1);
+                yval = l2(1)*xval + l2(2);
+            elseif c(i3,1) == c(i4,1)
+                xval = c(i3,1);
+                l1 = polyfit([c(i1,1),c(i6,1)],[c(i1,2),c(i6,2)],1);
+                yval = l1(1)*xval + l1(2);
+            else
+                l1 = polyfit([c(i1,1),c(i6,1)],[c(i1,2),c(i6,2)],1);
+                l2 = polyfit([c(i3,1),c(i4,1)],[c(i3,2),c(i4,2)],1);
+                xval = (l2(2)-l1(2))/(l1(1)-l2(1));
+                yval = l1(1)*xval + l1(2);
+            end
             pt2 = [xval, yval];
             c1(1,:) = pt1;
             c2(2,:) = pt2;            
@@ -100,19 +119,31 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
         if i2 == 0
             i2 = size(c1,1);
         end        
+        normalLine = 1;
         if c1(i,1) > c1(i2,1)
             modifier = -1;
             c1y = c1(i,2) + ltol;
             c2y = c1(i2,2) + ltol;
-        else
+        elseif c1(i,1) < c1(i2,1)
             modifier = 1;
             c1y = c1(i,2) - utol;
-            c2y = c1(i2,2) - utol;            
+            c2y = c1(i2,2) - utol;
+        else
+            normalLine = 0;
+            if c1(i,2) < c1(i2,2) % line is a left bound
+                D(i,1) = -1;
+                ch(i) = - c1(i,1) - ltol;
+            else % line is a right bound
+                D(i,1) = 1;
+                ch(i) = c1(i,1) - utol;
+            end                    
         end
-        coeff = polyfit([c1(i,1), c1(i2,1)], [c1y, c2y], 1);
-        D(i,1) = coeff(1) * modifier*(-1);
-        D(i,3) = modifier;     
-        ch(i) = modifier * coeff(2);
+        if normalLine == 1
+            coeff = polyfit([c1(i,1), c1(i2,1)], [c1y, c2y], 1);
+            D(i,1) = coeff(1) * modifier*(-1);
+            D(i,3) = modifier;     
+            ch(i) = modifier * coeff(2);
+        end
     end    
     D(end-1,5) = 1;      ch(end-1) = angleConstraint;
     D(end,7) = 1;        ch(end) = angleConstraint;  
@@ -160,20 +191,32 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
         i2 = mod(i+1,size(c2,1));
         if i2 == 0
             i2 = size(c2,1);
-        end        
+        end    
+        normalLine = 1;
         if c2(i,1) > c2(i2,1)
             modifier = -1;
             c1y = c2(i,2) + ltol;
             c2y = c2(i2,2) + ltol;
-        else
+        elseif c2(i,1) < c2(i2,1)
             modifier = 1;
             c1y = c2(i,2) - utol;
-            c2y = c2(i2,2) - utol;            
+            c2y = c2(i2,2) - utol;
+        else
+            normalLine = 0;
+            if c2(i,2) < c2(i2,2) % line is a left bound
+                D(i,1) = -1;
+                ch(i) = - c2(i,1) - ltol;
+            else % line is a right bound
+                D(i,1) = 1;
+                ch(i) = c2(i,1) - utol;
+            end                    
         end
-        coeff = polyfit([c2(i,1), c2(i2,1)], [c1y, c2y], 1);
-        D(i,1) = coeff(1) * modifier*(-1);
-        D(i,3) = modifier;     
-        ch(i) = modifier * coeff(2);
+        if normalLine == 1
+            coeff = polyfit([c2(i,1), c2(i2,1)], [c1y, c2y], 1);
+            D(i,1) = coeff(1) * modifier*(-1);
+            D(i,3) = modifier;     
+            ch(i) = modifier * coeff(2);
+        end
     end
     angleConstraint = 2*pi/180; % in radians
     D(end-1,5) = 1;      ch(end-1) = angleConstraint;
@@ -295,8 +338,10 @@ function u = myMPController(r, x_hat, param)
     opt.FeasibilityTol = 1e-3;
     opt.DataType = 'double';    
     persistent iA;
+    persistent iA2;
     if isempty(iA)
         iA = false(size(param.bb2));
+        iA2 = false(size(param.bb2));
     end    
     
     %% Check if we crossed the turning point yet
@@ -312,7 +357,7 @@ function u = myMPController(r, x_hat, param)
         f = w'*param.G2';
         b = -(param.bb2 + param.J2*x_hat(1:8) + param.L2*r(1:8));
         
-        [v, ~, iA, ~] = mpcqpsolver(param.H2, f', -param.F2, b, [], zeros(0,1), iA, opt);        
+        [v, ~, iA2, ~] = mpcqpsolver(param.H2, f', -param.F2, b, [], zeros(0,1), iA2, opt);        
         u = v(1:2);
     end       
 end % End of myMPController
