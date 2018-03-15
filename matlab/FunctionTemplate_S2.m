@@ -1,7 +1,7 @@
 % tbenchmin = 0.2926
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     %% Choose modifications to use
-    useRatePen = 0;
+    useRatePen = 1;
 
     %%
     trackwidth = sqrt(sum((c(2,:) - c(5,:)).^2));    
@@ -20,7 +20,8 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     param.tTol = eps_t;
     
     
-    load CraneParameters;
+    load SSmodelParams.mat;
+    load Params_Simscape.mat;
     Ts=1/20;
     Tf=2; % duration of prediction horizon in seconds
     N=ceil(Tf/Ts);
@@ -200,7 +201,14 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
 
     %% Compute QP cost matrices
     [H,G]=genCostMatrices(Gamma,Phi,Q,R,P,N);
-    
+    %% Rate penalties
+    if useRatePen == 1
+        R2 = 0.0003*eye(2);
+        T = [zeros(2,(N-1)*2), zeros(2,2);
+             eye((N-1)*2),     zeros((N-1)*2,2)];
+        RatePenMat = ((eye(N*2)) - T)'*kron(eye(N),R2)*((eye(N*2)) - T);
+        H = H + 2*RatePenMat;
+    end      
     %% Prepare cost and constraint matrices for mpcqpsolver
     H = chol(H,'lower');
     H=H\eye(size(H));    

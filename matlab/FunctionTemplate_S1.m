@@ -1,10 +1,10 @@
 %% Modify the following function for your setup function
-
+%% 3.15 seconds!!!!!!
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
-    %% Configure here    
+%%  Configure here    
     trackwidth = sqrt(sum((c(2,:) - c(3,:)).^2));    
     tol = 0.15*trackwidth;    
-    inputAttenuation = 1; % best=0.78
+    inputAttenuation = 1;%0.78; % best=0.78
     ul=inputAttenuation*[-1; -1];
     uh=inputAttenuation*[1; 1];    
     %% Choose which modifications to use
@@ -12,13 +12,8 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     param.soft = 0; % 0 for hard, 1 for soft
     useRatePen = 1; % 0 for no rate penalties to input    
     param.useDistRej = 0; % 0 for no disturbance rejection   
-    %%
-    
-    if param.soft == 0
-        angleConstraint = 4*pi/180; % in radians
-    else
-        angleConstraint = 2*pi/180; % in radians
-    end
+    %%        
+    angleConstraint = 4*pi/180; % in radians
 %   END OF CONFIGURATION    
     param.TP = targetPoint;
     
@@ -27,7 +22,9 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     
     param.start = startingPoint;
     
-    load CraneParameters;
+%     load CraneParameters;
+    load SSmodelParams.mat;
+    load Params_Simscape.mat;
     Ts=1/20;    
     Tf=2; % duration of prediction horizon in seconds
     N=ceil(Tf/Ts);
@@ -38,13 +35,16 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     
     %% Declare penalty matrices and tune them here:
     Q=zeros(8);
-    pos = 10; vel = 0; angl = 20; rangl = 0.003;%0.03 no I/P rate pen 
+    % penalties = [10,0,10,0,50,0,50,0]; % works pretty well
+    pos = 3; vel = 0; angl = 20; rangl = 0;%0.03 no I/P rate pen 
+%     pos = 10; vel = 0; angl = 50; rangl = 0;%0.03 no I/P rate pen 
     penalties = [pos,vel,pos,vel,angl,rangl,angl,rangl];
     for i = 1:length(penalties)
         Q(i,i) = penalties(i);
     end
     %% CHANGE TO VERY LOW NUMBER(EG. 0.0001) AND ADD RATE PENALTIES
     R=eye(2)*0.0001; % very small penalty on input to demonstrate hard constraints
+%     R=eye(2)*0.003; % very small penalty on input to demonstrate hard constraints
     P=Q; % terminal weight
     %% Smart Choice of P
     [K,~,~] = dlqr(A, B, Q, R);
@@ -114,21 +114,6 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
              eye((N-1)*2),     zeros((N-1)*2,2)];
         RatePenMat = ((eye(N*2)) - T)'*kron(eye(N),R2)*((eye(N*2)) - T);
         H = H + 2*RatePenMat;
-    end
-    
-    if param.soft == 1
-        %% Compute matrices and vectors for soft constraints
-        % Define weights for constraint violations
-        rho = 1e3; % weight for exact penalty term
-        S = 1e-3*eye(size(D,1)); % small positive definite quadratic cost to ensure uniqueness
-        [Hs,gs,Fs,bs,Js,Ls] = genSoftPadding(H,F,bb,J,L,S,rho,size(B,2));
-        %% replace matrices and vectors to simplify code
-        H = Hs; F = Fs; bb = bs; J = Js; L = Ls;
-        param.gs = gs;
-        param.S = S;
-    else
-        param.gs = 0;
-        param.S = 0;
     end
     %% Offset blocking
     if param.mod == 1
@@ -257,11 +242,8 @@ function u = myMPController(r, x_hat, param)
         %% your code starts here            
         % Cholksey and inverse already computed and stored in H
         w = x_hat(1:8) - r(1:8);
-        if param.soft == 0
-            f = w'*param.G'; % Hard
-        else            
-            f = [w'*param.G', param.gs']; % Soft
-        end
+        
+        f = w'*param.G'; % Hard
         b = -(param.bb + param.J*x_hat(1:8) + param.L*r(1:8));
         [ubar, ~, iA, ~] = mpcqpsolver(param.H, f', -param.F, b, [], zeros(0,1), iA, opt);
         %% your remaining code here
