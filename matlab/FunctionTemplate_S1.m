@@ -26,7 +26,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     load SSmodelParams.mat;
     load Params_Simscape.mat;
     Ts=1/20;    
-    Tf=2; % duration of prediction horizon in seconds
+    Tf=1.8; % duration of prediction horizon in seconds
     N=ceil(Tf/Ts);
     [A,B,C,~] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vm,Ts);  
     param.A = A;
@@ -41,19 +41,19 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     penalties = [pos,vel,pos,vel,angl,rangl,angl,rangl];
     for i = 1:length(penalties)
         Q(i,i) = penalties(i);
-    end
+    end    
     %% CHANGE TO VERY LOW NUMBER(EG. 0.0001) AND ADD RATE PENALTIES
     R=eye(2)*0.0001; % very small penalty on input to demonstrate hard constraints
 %     R=eye(2)*0.003; % very small penalty on input to demonstrate hard constraints
     P=Q; % terminal weight
     %% Smart Choice of P
     [K,~,~] = dlqr(A, B, Q, R);
-    P = dlyap((A-B*K)', Q + K'*R*K);    
+    P = dlyap((A-B*K)', Q + K'*R*K); 
     if param.mod == 1
         % Ricatti Thing    
-        [P,~,~] = dare(A,B,Q,R);
-        K_lqr = -((B'*P*B + R)^-1)*B'*P*A;
-        param.K_lqr = K_lqr;
+%         [P,~,~] = dare(A,B,Q,R);
+%         K = -((B'*P*B + R)^-1)*B'*P*A;
+        param.K_lqr = K;
     else
         param.K_lqr = zeros(2,8);
     end
@@ -130,7 +130,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     %% Offset blocking
     if param.mod == 1
         Iu = eye(N*2); % N*m
-        IkronK = kron(eye(N), K_lqr);
+        IkronK = kron(eye(N), K);
         M1 = (Iu - IkronK*Gamma)^-1;
         M2 = IkronK*Phi;
         H = M1'*H*M1;
@@ -154,8 +154,8 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     param.bb = bb;
     
     %% Disturbance Rejection stuff
-    Cd = 0.01*eye(8);
-    Bd = 0.01*eye(8);
+    Cd = diag([10 0.1 10 0.1 0.1 0.05 0.1 0.05]);
+    Bd = diag([10 0.1 10 0.1 0.1 0.05 0.1 0.05]);
     Hdr = eye(8);
     Mdrd = Hdr * Cd;
     Mdr = Hdr * C;
@@ -208,20 +208,21 @@ function x_hat = myStateEstimator(u, y, param)
     %% Pendulum is assumed to be of length 0.47m
     x_hat(1:8) = param.C\y;    
     %% Disturbance Rejection
-    persistent state;     
+    persistent state;          
     if isempty(state)
         state = zeros(16,1);
         state(1) = param.startingPoint(1);
         state(3) = param.startingPoint(2);
     else
-        if param.useDistRej == 1                                          
+        if param.useDistRej == 1 
+            x_hat = state;
             state = param.Adr * state + param.Bdr*u +...
                 param.Ldr*(y - [param.C, param.Cd]*state);
         end
     end
-    if param.useDistRej == 1
-        x_hat = state;
-    end
+%     if param.useDistRej == 1
+%         x_hat = state;
+%     end
 end % End of myStateEstimator
 
 

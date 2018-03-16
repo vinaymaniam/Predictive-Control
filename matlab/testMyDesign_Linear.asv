@@ -3,27 +3,47 @@ close all
 
 testShape = 1;
 
-startingPoint = [0.05, 0.05];
+
 %% Create the test shape
 switch ( testShape )
     case 1
         c = [0.00, 0.05;
              0.45, 0.50;
              0.50, 0.45;
-             0.05, 0.00];   
-        targetPoint = [0.4, 0.4];
+             0.05, 0.00];
+         
+%         c = [0.00, 0.45;
+%              0.45, 0.45;
+%              0.45, 0.35;
+%              0.00, 0.35];
     case 2
         c = [0.00, 0.05;
              0.25, 0.30;
              0.50, 0.05;
              0.45, 0.00;
-             0.25, 0.20;
+             0.25, 0.20
              0.05, 0.00];
+%         c = [0.00, 0.00;
+%              0.00, 0.45;
+%              0.45, 0.45;
+%              0.45, 0.35;
+%              0.10, 0.35;
+%              0.10, 0.00];  
         targetPoint = [0.45, 0.05];
 end
 
 
 %% Some other parameters
+% The starting point
+startingPoint = [0.05, 0.05];
+
+% The target point
+switch (testShape)
+    case 1
+        targetPoint = [0.4, 0.4];
+    case 2
+        targetPoint = [0.45, 0.05];
+end
 
 % The tolerances
 eps_r = 0.02;

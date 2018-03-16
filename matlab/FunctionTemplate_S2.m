@@ -23,7 +23,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     load SSmodelParams.mat;
     load Params_Simscape.mat;
     Ts=1/20;
-    Tf=2; % duration of prediction horizon in seconds
+    Tf=2.2; % duration of prediction horizon in seconds
     N=ceil(Tf/Ts);
     [A,B,C,~] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vm,Ts);    
     %% Declare penalty matrices and tune them here:
@@ -39,7 +39,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     P = Q; % terminal weight
     %% Smart Choice of P
     [K,~,~] = dlqr(A, B, Q, R);
-%     P = dlyap((A-B*K)', Q + K'*R*K);
+    P = dlyap((A-B*K)', Q + K'*R*K);
     %% Find splitting line to separate 2 rectangles
     ctmp = [c, zeros(size(c,1),1)];
     switch_line = [0 0];
