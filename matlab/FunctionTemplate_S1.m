@@ -1,8 +1,7 @@
 %% Modify the following function for your setup function
 %% 3.15 seconds!!!!!!
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
-%%  Configure here    
-    tic
+%%  Configure here       
     trackwidth = sqrt(sum((c(2,:) - c(3,:)).^2));    
     tol = 0.15*trackwidth;    
     inputAttenuation = 1;%0.78; % best=0.78
@@ -182,9 +181,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
         param.Cd = 0;
         param.Ldr = 0;
     end
-    param.startingPoint = startingPoint;    
-    fprintf('My Setup took %.2f seconds\n', toc)
-    
+    param.startingPoint = startingPoint;        
 end % End of mySetup
 
 
@@ -273,7 +270,5 @@ function u = myMPController(r, x_hat, param)
             v = ubar(1:2);
         end
         u = v;
-    else
-        fprintf('Settled\n')
     end
 end % End of myMPController

@@ -1,158 +1,111 @@
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
-    %% Choose modifications to use
-    useRatePen = 1;
-
-    %%
-    tic
-    trackwidth = sqrt(sum((c(2,:) - c(5,:)).^2));    
-    utol = 0.15*trackwidth; ltol = 0.15*trackwidth;
-    angleConstraint = 8*pi/180; % in radians
-    midpoint = 0.5; % distance between 2 mid points to set 1st target
-    % Input constraints (hard)
-    inputAttenuation = 1;
+%%  Configure here       
+    trackwidth = sqrt(sum((c(2,:) - c(3,:)).^2));    
+    tol = 0.15*trackwidth;    
+    inputAttenuation = 1;%0.78; % best=0.78
     ul=inputAttenuation*[-1; -1];
-    uh=inputAttenuation*[1; 1];     
-    % Set targets
-    param.TP1 = [0 0]; % assigned in splitline
-    param.TP2 = targetPoint;
+    uh=inputAttenuation*[1; 1];    
+    %% Choose which modifications to use
+    param.mod = 0; % 0 = NO MOD, 1 = OFFSET BLOCKING
+    param.soft = 0; % 0 for hard, 1 for soft
+    useRatePen = 1; % 0 for no rate penalties to input    
+    param.useDistRej = 0; % 0 for no disturbance rejection   
+    %%        
+    angleConstraint = 4*pi/180; % in radians
+%   END OF CONFIGURATION    
+    param.TP = targetPoint;
     
     param.rTol = eps_r;
     param.tTol = eps_t;
     
+    param.start = startingPoint;
     
+%     load CraneParameters;
     load SSmodelParams.mat;
     load Params_Simscape.mat;
-    Ts=1/20;
-    Tf=2.2; % duration of prediction horizon in seconds
+    Ts=1/20;    
+    Tf=1.8; % duration of prediction horizon in seconds
     N=ceil(Tf/Ts);
-    [A,B,C,~] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vm,Ts);    
+    [A,B,C,~] = genCraneODE(m,M,MR,r,g,Tx,Ty,Vm,Ts);  
+    param.A = A;
+    param.B = B;
+    param.C = C;
+    
     %% Declare penalty matrices and tune them here:
-%     Q = diag([10 0 10 0 0 0 0 0]);
-    Q = zeros(8);
-    penalties = [10,0,10,0,50,0,50,0]; %base form works reasonably well
-    pos = 2; vel = 0; angl = 20; rangl = 0;%0.03 no I/P rate pen 
-    penalties = [pos,vel,pos,vel,angl,rangl,angl,rangl];    
+    Q=zeros(8);
+    % penalties = [10,0,10,0,50,0,50,0]; % works pretty well
+    pos = 2.2; vel = 0; angl = 20; rangl = 0;%0.03 no I/P rate pen 
+%     pos = 10; vel = 0; angl = 50; rangl = 0;%0.03 no I/P rate pen 
+    penalties = [pos,vel,pos,vel,angl,rangl,angl,rangl];
     for i = 1:length(penalties)
         Q(i,i) = penalties(i);
-    end
-    R = eye(2)*0.0001; % very small penalty on input to demonstrate hard constraints
-    P = Q; % terminal weight
+    end    
+    %% CHANGE TO VERY LOW NUMBER(EG. 0.0001) AND ADD RATE PENALTIES
+    R=eye(2)*0.0001; % very small penalty on input to demonstrate hard constraints
+%     R=eye(2)*0.003; % very small penalty on input to demonstrate hard constraints
+    P=Q; % terminal weight
     %% Smart Choice of P
     [K,~,~] = dlqr(A, B, Q, R);
-    P = dlyap((A-B*K)', Q + K'*R*K);
-    %% Find splitting line to separate 2 rectangles
-    ctmp = [c, zeros(size(c,1),1)];
-    switch_line = [0 0];
-    c1 = zeros(4,2);
-    c2 = zeros(4,2);
-    for i = 1:size(ctmp,1)
-        i0 = mod(i,size(c,1)); i0(i0==0) = 6;
-        i1 = mod(i+1,size(c,1)); i1(i1==0) = 6;
-        i2 = mod(i+2,size(c,1)); i2(i2==0) = 6;
-        i3 = mod(i+3,size(c,1)); i3(i3==0) = 6;
-        i4 = mod(i+4,size(c,1)); i4(i4==0) = 6;
-        i5 = mod(i+5,size(c,1)); i5(i5==0) = 6;
-        i6 = mod(i+6,size(c,1)); i6(i6==0) = 6;
-        
-        l1 = ctmp(i1,:) - ctmp(i,:);
-        l2 = ctmp(i2,:) - ctmp(i1,:);
-        cp = cross(l1,l2);
-        if min(cp) >= 0
-            if c(i1,1) == c(i4,1)
-                switch_line(1) = -10e10;
-                switch_line(2) = c(i1,2) - switch_line(1)*c(i1,1);
-            else
-                switch_line = polyfit([c(i1,1), c(i4,1)], [c(i1,2), c(i4,2)],1);  
-            end
-            param.TP1 = midpoint*(c(i1,:)) + (1-midpoint)*(c(i4,:));
-            c2 = c([i0,i1,i4,i5],:);
-            c1 = c([i1,i2,i3,i4],:);
-            %make c1 and c2 overlapping rectangles rather than trapeziums
-            if c(i1,1) == c(i2,1)
-                xval = c(i1,1);
-                l2 = polyfit([c(i4,1),c(i5,1)],[c(i4,2),c(i5,2)],1);
-                yval = l2(1)*xval + l2(2);
-            elseif c(i4,1) == c(i5,1)
-                xval = c(i4,1);
-                l1 = polyfit([c(i1,1),c(i2,1)],[c(i1,2),c(i2,2)],1);
-                yval = l1(1)*xval + l1(2);
-            else
-                l1 = polyfit([c(i1,1),c(i2,1)],[c(i1,2),c(i2,2)],1);
-                l2 = polyfit([c(i4,1),c(i5,1)],[c(i4,2),c(i5,2)],1);
-                xval = (l2(2)-l1(2))/(l1(1)-l2(1));
-                yval = l1(1)*xval + l1(2);
-            end
-            pt1 = [xval, yval];
-            if c(i1,1) == c(i6,1)
-                xval = c(i1,1);
-                l2 = polyfit([c(i3,1),c(i4,1)],[c(i3,2),c(i4,2)],1);
-                yval = l2(1)*xval + l2(2);
-            elseif c(i3,1) == c(i4,1)
-                xval = c(i3,1);
-                l1 = polyfit([c(i1,1),c(i6,1)],[c(i1,2),c(i6,2)],1);
-                yval = l1(1)*xval + l1(2);
-            else
-                l1 = polyfit([c(i1,1),c(i6,1)],[c(i1,2),c(i6,2)],1);
-                l2 = polyfit([c(i3,1),c(i4,1)],[c(i3,2),c(i4,2)],1);
-                xval = (l2(2)-l1(2))/(l1(1)-l2(1));
-                yval = l1(1)*xval + l1(2);
-            end
-            pt2 = [xval, yval];
-            c1(1,:) = pt1;
-            c2(2,:) = pt2;            
-        end
-    end
-    param.switch_line = switch_line;
-    if startingPoint(2) > switch_line(1)*startingPoint(1) + switch_line(2)
-        param.toggle = -1;
+    P = dlyap((A-B*K)', Q + K'*R*K); 
+    if param.mod == 1
+        % Ricatti Thing    
+%         [P,~,~] = dare(A,B,Q,R);
+%         K = -((B'*P*B + R)^-1)*B'*P*A;
+        param.K_lqr = K;
     else
-        param.toggle = 1;
+        param.K_lqr = zeros(2,8);
     end
-%%  c1
     %% Construct constraint matrix D
     % General form
-    D = zeros(size(c1,1) + 2, 8);
-    ch = zeros(size(c1,1) + 2, 1);        
-    
-    for i = 1:size(c1,1)
-        i2 = mod(i+1,size(c1,1));
+    D = zeros(size(c,1) + 2, 8);
+    ch = zeros(size(c,1) + 2, 1);       
+    lblines = [];
+    ublines = [];
+    for i = 1:size(c,1)
+        i2 = mod(i+1,size(c,1));
         if i2 == 0
-            i2 = size(c1,1);
-        end        
+            i2 = size(c,1);
+        end    
         normalLine = 1;
-        if c1(i,1) > c1(i2,1)
+        if c(i,1) > c(i2,1)
             modifier = -1;
-            c1y = c1(i,2) + ltol;
-            c2y = c1(i2,2) + ltol;
-        elseif c1(i,1) < c1(i2,1)
+            c1y = c(i,2) + tol;
+            c2y = c(i2,2) + tol;
+            coeff = polyfit([c(i,1), c(i2,1)], [c1y, c2y], 1);
+            lblines = [lblines; [coeff, i]];
+        elseif c(i,1) < c(i2,1)
             modifier = 1;
-            c1y = c1(i,2) - utol;
-            c2y = c1(i2,2) - utol;
-        else
+            c1y = c(i,2) - tol;
+            c2y = c(i2,2) - tol;    
+            coeff = polyfit([c(i,1), c(i2,1)], [c1y, c2y], 1);
+            ublines = [ublines; [coeff, i]];
+        else % vertical line
             normalLine = 0;
-            if c1(i,2) < c1(i2,2) % line is a left bound
+            if c(i,2) < c(i2,2) % line is a left bound
                 D(i,1) = -1;
-                ch(i) = - c1(i,1) - ltol;
+                ch(i) = -c(i,1) - tol;
             else % line is a right bound
                 D(i,1) = 1;
-                ch(i) = c1(i,1) - utol;
-            end                    
+                ch(i) = c(i,1) - tol;
+            end
         end
         if normalLine == 1
-            coeff = polyfit([c1(i,1), c1(i2,1)], [c1y, c2y], 1);
             D(i,1) = coeff(1) * modifier*(-1);
             D(i,3) = modifier;     
             ch(i) = modifier * coeff(2);
         end
     end    
-    D(end-1,5) = 1;      ch(end-1) = angleConstraint;
-    D(end,7) = 1;        ch(end) = angleConstraint;  
+    D(end-1,5) = 1;      D(end,7) = 1;        
+    ch(end-1) = angleConstraint;    
+    ch(end) = angleConstraint;      
     cl = -inf*ones(size(ch));
     cl(end-1) = -angleConstraint;
     cl(end) = -angleConstraint;
+    
     %% End of construction        
+    
 
-    %% Compute stage constraint matrices and vector
+    %% Compute stage constraint matrices and vector    
     [Dt,Et,bt]=genStageConstraints(A,B,D,cl,ch,ul,uh);
     %% Compute trajectory constraints matrices and vector
     [DD,EE,bb]=genTrajectoryConstraints(Dt,Et,bt,N);
@@ -163,6 +116,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
 
     %% Compute QP cost matrices
     [H,G]=genCostMatrices(Gamma,Phi,Q,R,P,N);
+    
     %% Rate penalties
     if useRatePen == 1
         R2 = 0.0002*eye(2);
@@ -170,104 +124,62 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
              eye((N-1)*2),     zeros((N-1)*2,2)];
         RatePenMat = ((eye(N*2)) - T)'*kron(eye(N),R2)*((eye(N*2)) - T);
         H = H + 2*RatePenMat;
-    end    
-    %% Prepare cost and constraint matrices for mpcqpsolver
-    H = chol(H,'lower');
-    H=H\eye(size(H));    
-    
-    param.H1 = H;
-    param.G1 = G;    
-    param.F1 = F;
-    param.J1 = J;
-    param.L1 = L;
-    param.bb1 = bb;
-%%  c2
-    %% Construct constraint matrix D
-    % General form
-    D = zeros(size(c2,1) + 2, 8);
-    ch = zeros(size(c2,1) + 2, 1);        
-    
-    for i = 1:size(c2,1)
-        i2 = mod(i+1,size(c2,1));
-        if i2 == 0
-            i2 = size(c2,1);
-        end    
-        normalLine = 1;
-        if c2(i,1) > c2(i2,1)
-            modifier = -1;
-            c1y = c2(i,2) + ltol;
-            c2y = c2(i2,2) + ltol;
-        elseif c2(i,1) < c2(i2,1)
-            modifier = 1;
-            c1y = c2(i,2) - utol;
-            c2y = c2(i2,2) - utol;
-        else
-            normalLine = 0;
-            if c2(i,2) < c2(i2,2) % line is a left bound
-                D(i,1) = -1;
-                ch(i) = - c2(i,1) - ltol;
-            else % line is a right bound
-                D(i,1) = 1;
-                ch(i) = c2(i,1) - utol;
-            end                    
-        end
-        if normalLine == 1
-            coeff = polyfit([c2(i,1), c2(i2,1)], [c1y, c2y], 1);
-            D(i,1) = coeff(1) * modifier*(-1);
-            D(i,3) = modifier;     
-            ch(i) = modifier * coeff(2);
-        end
     end
-    angleConstraint = 2*pi/180; % in radians
-    D(end-1,5) = 1;      ch(end-1) = angleConstraint;
-    D(end,7) = 1;        ch(end) = angleConstraint;  
-
-    %% End of construction        
-    % Input constraints (hard)
-    ul=[-1; -1];
-    uh=[1; 1];
-
-    %% Compute stage constraint matrices and vector
-    DA = D*A;
-    DB = D*B;
-    I = eye(size(B,2));
-    O = zeros(size(B,2),size(A,2));
-    Dt = [DA; O; O];
-    Et = [DB; I; -I];
-    bt = [ch; uh; -ul];    
-    %% Compute trajectory constraints matrices and vector
-    [DD,EE,bb]=genTrajectoryConstraints(Dt,Et,bt,N);
-
-    %% Compute QP constraint matrices
-    [Gamma,Phi] = genPrediction(A,B,N); % get prediction matrices:
-    [F,J,L]=genConstraintMatrices(DD,EE,Gamma,Phi,N);
-
-    %% Compute QP cost matrices
-    [H,G]=genCostMatrices(Gamma,Phi,Q,R,P,N);
-    %% Rate penalties
-    if useRatePen == 1
-        R2 = 0.0003*eye(2);
-        T = [zeros(2,(N-1)*2), zeros(2,2);
-             eye((N-1)*2),     zeros((N-1)*2,2)];
-        RatePenMat = ((eye(N*2)) - T)'*kron(eye(N),R2)*((eye(N*2)) - T);
-        H = H + 2*RatePenMat;
-    end      
+    %% Offset blocking
+    if param.mod == 1
+        Iu = eye(N*2); % N*m
+        IkronK = kron(eye(N), K);
+        M1 = (Iu - IkronK*Gamma)^-1;
+        M2 = IkronK*Phi;
+        H = M1'*H*M1;
+        G = (G'*M1 + M2'*M1'*H*M1)';
+        param.M1 = M1;
+        param.M2 = M2;
+    else
+        param.M1 = 0;
+        param.M2 = 0;
+    end
+    
     %% Prepare cost and constraint matrices for mpcqpsolver
     H = chol(H,'lower');
     H=H\eye(size(H));    
     
-    param.H2 = H;
-    param.G2 = G;    
-    param.F2 = F;
-    param.J2 = J;
-    param.L2 = L;
-    param.bb2 = bb;
-%%  Rest of code
-    param.A = A;
-    param.C = C;
-    
-    fprintf('My Setup took %.2f seconds\n', toc)
-                     
+    param.H = H;
+    param.G = G;    
+    param.F = F;
+    param.J = J;
+    param.L = L;
+    param.bb = bb;    
+    %% Disturbance Rejection stuff
+    if param.useDistRej
+        Cd = diag([10 0.1 10 0.1 0.1 0.05 0.1 0.05]);
+        Bd = diag([10 0.1 10 0.1 0.1 0.05 0.1 0.05]);
+        Hdr = eye(8);
+        Mdrd = Hdr * Cd;
+        Mdr = Hdr * C;
+        param.DR1 = [eye(size(A,1))-A,                   -param.B;
+                     Mdr,      zeros(size(Mdr,1),size(param.B,2))];
+        param.DR2 = [Bd,      zeros(size(Bd));
+                     -Mdrd,   eye(size(Mdrd,1))];   
+        param.Adr = [A,                Bd;
+                     zeros(size(A,1)), eye(size(A,1))];
+        param.Bdr = [B; zeros(8,2)];
+
+        Ct = [param.C, Cd]';
+        Qt = 0.1*eye(16);
+        Rv = 0.1*eye(8); 
+        [Sigma,~,~] = dare(param.Adr',Ct,Qt,Rv);
+        param.Ldr = param.Adr'*Sigma*Ct/((Ct'*Sigma*Ct + Rv));
+        param.Cd = Cd;        
+    else
+        param.DR1 = 0;
+        param.DR2 = 0;
+        param.Adr = 0;
+        param.Bdr = 0;
+        param.Cd = 0;
+        param.Ldr = 0;
+    end
+    param.startingPoint = startingPoint;        
 end % End of mySetup
 
 
@@ -275,4 +187,3 @@ end % End of mySetup
 
 
 %% Modify the following function for your target generation
-

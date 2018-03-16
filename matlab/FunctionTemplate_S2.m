@@ -2,9 +2,7 @@
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     %% Choose modifications to use
     useRatePen = 1;
-
     %%
-    tic
     trackwidth = sqrt(sum((c(2,:) - c(5,:)).^2));    
     utol = 0.15*trackwidth; ltol = 0.15*trackwidth;
     angleConstraint = 8*pi/180; % in radians
@@ -266,9 +264,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
 %%  Rest of code
     param.A = A;
     param.C = C;
-    
-    fprintf('My Setup took %.2f seconds\n', toc)
-                     
+                         
 end % End of mySetup
 
 
@@ -300,6 +296,8 @@ function r = myTargetGenerator(x_hat, param)
         r(3,1) = param.TP2(2);
     end    
     radius = sqrt((abs(x_hat(1) - param.TP1(1)))^2+(abs(x_hat(3) - param.TP1(2)))^2);
+    % 0.0003 was manually selected from data collection of the oscillatory
+    % response of the overly aggressive system around TP
     if (radius < 0.003) && (stuck2 == 0)
         stuck = stuck + 1;        
         if stuck > 2
