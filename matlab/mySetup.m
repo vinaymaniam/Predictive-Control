@@ -3,10 +3,11 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     useRatePen = 1;
 
     %%
+    tic
     trackwidth = sqrt(sum((c(2,:) - c(5,:)).^2));    
     utol = 0.15*trackwidth; ltol = 0.15*trackwidth;
     angleConstraint = 8*pi/180; % in radians
-    midpoint = 0.7; % distance between 2 mid points to set 1st target
+    midpoint = 0.5; % distance between 2 mid points to set 1st target
     % Input constraints (hard)
     inputAttenuation = 1;
     ul=inputAttenuation*[-1; -1];
@@ -265,8 +266,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     param.A = A;
     param.C = C;
     
-    param.K_lin = [1 0 0 0 0 0 0 0;
-                   0 0 1 0 0 0 0 0];
+    fprintf('My Setup took %.2f seconds\n', toc)
                      
 end % End of mySetup
 

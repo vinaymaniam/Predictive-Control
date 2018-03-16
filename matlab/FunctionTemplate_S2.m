@@ -4,10 +4,11 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     useRatePen = 1;
 
     %%
+    tic
     trackwidth = sqrt(sum((c(2,:) - c(5,:)).^2));    
     utol = 0.15*trackwidth; ltol = 0.15*trackwidth;
     angleConstraint = 8*pi/180; % in radians
-    midpoint = 0.7; % distance between 2 mid points to set 1st target
+    midpoint = 0.5; % distance between 2 mid points to set 1st target
     % Input constraints (hard)
     inputAttenuation = 1;
     ul=inputAttenuation*[-1; -1];
@@ -266,8 +267,7 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     param.A = A;
     param.C = C;
     
-    param.K_lin = [1 0 0 0 0 0 0 0;
-                   0 0 1 0 0 0 0 0];
+    fprintf('My Setup took %.2f seconds\n', toc)
                      
 end % End of mySetup
 
@@ -286,25 +286,28 @@ function r = myTargetGenerator(x_hat, param)
     % This is the block in which I have full control over how i decide where the crane
     % should go.
     % Make the crane go to (xTar, yTar)
-    if param.toggle*x_hat(3) < param.toggle*(x_hat(1)*param.switch_line(1) + param.switch_line(2))        
+    persistent stuck;
+    persistent stuck2;
+    if isempty(stuck)
+        stuck = 0;
+        stuck2 = 0;
+    end
+    if (param.toggle*x_hat(3) < param.toggle*(x_hat(1)*param.switch_line(1) + param.switch_line(2))) && stuck2 == 0
         r(1,1) = param.TP1(1);
         r(3,1) = param.TP1(2);
-%         fprintf('Not Switched')
-    else
-        radius = sqrt((abs(x_hat(1) - param.TP2(1)))^2+(abs(x_hat(3) - param.TP2(2)))^2);
-        condition = (radius < param.tTol) &...
-                    (abs(x_hat(2)) < param.rTol) &...
-                    (abs(x_hat(4)) < param.rTol)&...
-                    (abs(x_hat(6)) < param.rTol)&...
-                    (abs(x_hat(8)) < param.rTol);
-        if condition
-            r(1:8) = x_hat(1:8);
-        else
+    else        
+        r(1,1) = param.TP2(1);
+        r(3,1) = param.TP2(2);
+    end    
+    radius = sqrt((abs(x_hat(1) - param.TP1(1)))^2+(abs(x_hat(3) - param.TP1(2)))^2);
+    if (radius < 0.003) && (stuck2 == 0)
+        stuck = stuck + 1;        
+        if stuck > 2
             r(1,1) = param.TP2(1);
-            r(3,1) = param.TP2(2);
-        end
-%         fprintf('Switched')
-    end   
+            r(3,1) = param.TP2(2);            
+            stuck2 = 1;
+        end        
+    end
 end % End of myTargetGenerator
 
 
@@ -343,21 +346,25 @@ function u = myMPController(r, x_hat, param)
         iA = false(size(param.bb2));
         iA2 = false(size(param.bb2));
     end    
-    
-    %% Check if we crossed the turning point yet
-    if param.toggle*x_hat(3) < param.toggle*(x_hat(1)*param.switch_line(1) + param.switch_line(2))
-        w = x_hat(1:8) - r(1:8);
-        f = w'*param.G1';
-        b = -(param.bb1 + param.J1*x_hat(1:8) + param.L1*r(1:8));
-        [v, ~, ~, ~] = mpcqpsolver(param.H1, f', -param.F1, b, [], zeros(0,1), false(size(param.bb1)), opt);        
-        u = v(1:2);
-    else
-        radius = sqrt((abs(x_hat(1) - param.TP2(1)))^2+(abs(x_hat(3) - param.TP2(2)))^2);
-        w = x_hat(1:8) - r(1:8);
-        f = w'*param.G2';
-        b = -(param.bb2 + param.J2*x_hat(1:8) + param.L2*r(1:8));
-        
-        [v, ~, iA2, ~] = mpcqpsolver(param.H2, f', -param.F2, b, [], zeros(0,1), iA2, opt);        
-        u = v(1:2);
-    end       
+    radius = sqrt((abs(x_hat(1) - param.TP2(1)))^2+(abs(x_hat(3) - param.TP2(2)))^2);
+    condition = (radius < param.tTol^2) &...
+                (abs(x_hat(5)) < param.rTol)&...
+                (abs(x_hat(7)) < param.rTol);
+    if ~condition
+        %% Check if we crossed the turning point yet
+        if r(1,1) == param.TP1(1)
+            w = x_hat(1:8) - r(1:8);
+            f = w'*param.G1';
+            b = -(param.bb1 + param.J1*x_hat(1:8) + param.L1*r(1:8));
+            [v, ~, ~, ~] = mpcqpsolver(param.H1, f', -param.F1, b, [], zeros(0,1), false(size(param.bb1)), opt);        
+            u = v(1:2);
+        else
+            w = x_hat(1:8) - r(1:8);
+            f = w'*param.G2';
+            b = -(param.bb2 + param.J2*x_hat(1:8) + param.L2*r(1:8));
+
+            [v, ~, iA2, ~] = mpcqpsolver(param.H2, f', -param.F2, b, [], zeros(0,1), iA2, opt);        
+            u = v(1:2);
+        end
+    end
 end % End of myMPController

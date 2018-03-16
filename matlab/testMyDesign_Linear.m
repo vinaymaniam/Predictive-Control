@@ -1,7 +1,7 @@
 clear variables
 close all
 
-testShape = 1;
+testShape = 2;
 
 startingPoint = [0.05, 0.05];
 %% Create the test shape

@@ -2,6 +2,7 @@
 %% 3.15 seconds!!!!!!
 function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
 %%  Configure here    
+    tic
     trackwidth = sqrt(sum((c(2,:) - c(3,:)).^2));    
     tol = 0.15*trackwidth;    
     inputAttenuation = 1;%0.78; % best=0.78
@@ -151,29 +152,39 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     param.F = F;
     param.J = J;
     param.L = L;
-    param.bb = bb;
-    
+    param.bb = bb;    
     %% Disturbance Rejection stuff
-    Cd = diag([10 0.1 10 0.1 0.1 0.05 0.1 0.05]);
-    Bd = diag([10 0.1 10 0.1 0.1 0.05 0.1 0.05]);
-    Hdr = eye(8);
-    Mdrd = Hdr * Cd;
-    Mdr = Hdr * C;
-    param.DR1 = [eye(size(A,1))-A,                   -param.B;
-                 Mdr,      zeros(size(Mdr,1),size(param.B,2))];
-    param.DR2 = [Bd,      zeros(size(Bd));
-                 -Mdrd,   eye(size(Mdrd,1))];   
-    param.Adr = [A,                Bd;
-                 zeros(size(A,1)), eye(size(A,1))];
-    param.Bdr = [B; zeros(8,2)];
+    if param.useDistRej
+        Cd = diag([10 0.1 10 0.1 0.1 0.05 0.1 0.05]);
+        Bd = diag([10 0.1 10 0.1 0.1 0.05 0.1 0.05]);
+        Hdr = eye(8);
+        Mdrd = Hdr * Cd;
+        Mdr = Hdr * C;
+        param.DR1 = [eye(size(A,1))-A,                   -param.B;
+                     Mdr,      zeros(size(Mdr,1),size(param.B,2))];
+        param.DR2 = [Bd,      zeros(size(Bd));
+                     -Mdrd,   eye(size(Mdrd,1))];   
+        param.Adr = [A,                Bd;
+                     zeros(size(A,1)), eye(size(A,1))];
+        param.Bdr = [B; zeros(8,2)];
+
+        Ct = [param.C, Cd]';
+        Qt = 0.1*eye(16);
+        Rv = 0.1*eye(8); 
+        [Sigma,~,~] = dare(param.Adr',Ct,Qt,Rv);
+        param.Ldr = param.Adr'*Sigma*Ct/((Ct'*Sigma*Ct + Rv));
+        param.Cd = Cd;        
+    else
+        param.DR1 = 0;
+        param.DR2 = 0;
+        param.Adr = 0;
+        param.Bdr = 0;
+        param.Cd = 0;
+        param.Ldr = 0;
+    end
+    param.startingPoint = startingPoint;    
+    fprintf('My Setup took %.2f seconds\n', toc)
     
-    Ct = [param.C, Cd]';
-    Qt = 0.1*eye(16);
-    Rv = 0.1*eye(8); 
-    [Sigma,~,~] = dare(param.Adr',Ct,Qt,Rv);
-    param.Ldr = param.Adr'*Sigma*Ct/((Ct'*Sigma*Ct + Rv));
-    param.Cd = Cd;
-    param.startingPoint = startingPoint;
 end % End of mySetup
 
 
@@ -189,9 +200,9 @@ function r = myTargetGenerator(x_hat, param)
     % Make the crane go to (xTar, yTar)
     r(1,1) = param.TP(1);
     r(3,1) = param.TP(2);
-    if param.useDistRej
-        r = param.DR1\(param.DR2*[x_hat(9:16); r(1:8)]);
-    end
+%     if param.useDistRej
+%         r = param.DR1\(param.DR2*[x_hat(9:16); r(1:8)]);
+%     end
     
 end % End of myTargetGenerator
 
@@ -208,20 +219,17 @@ function x_hat = myStateEstimator(u, y, param)
     %% Pendulum is assumed to be of length 0.47m
     x_hat(1:8) = param.C\y;    
     %% Disturbance Rejection
-    persistent state;          
-    if isempty(state)
-        state = zeros(16,1);
-        state(1) = param.startingPoint(1);
-        state(3) = param.startingPoint(2);
-    else
-        if param.useDistRej == 1 
-            x_hat = state;
-            state = param.Adr * state + param.Bdr*u +...
-                param.Ldr*(y - [param.C, param.Cd]*state);
-        end
-    end
-%     if param.useDistRej == 1
-%         x_hat = state;
+%     persistent state;          
+%     if isempty(state)
+%         state = zeros(16,1);
+%         state(1) = param.startingPoint(1);
+%         state(3) = param.startingPoint(2);
+%     else
+%         if param.useDistRej == 1 
+%             x_hat = state;
+%             state = param.Adr * state + param.Bdr*u +...
+%                 param.Ldr*(y - [param.C, param.Cd]*state);
+%         end
 %     end
 end % End of myStateEstimator
 
@@ -236,11 +244,9 @@ function u = myMPController(r, x_hat, param)
     u = zeros(2,1);
     %% Check if crane is at target point
     radius = sqrt((abs(x_hat(1) - param.TP(1)))^2+(abs(x_hat(3) - param.TP(2)))^2);
-    condition = (radius < param.tTol) &...
-                (abs(x_hat(2)) < param.rTol) &...
-                (abs(x_hat(4)) < param.rTol)&...
-                (abs(x_hat(6)) < param.rTol)&...
-                (abs(x_hat(8)) < param.rTol);
+    condition = (radius < param.tTol^2) &...
+                (abs(x_hat(5)) < param.tTol)&...
+                (abs(x_hat(7)) < param.tTol);
 %     condition = 0; % Leave the condition to be handled by target gen
     persistent iA;
     if isempty(iA)
@@ -267,5 +273,7 @@ function u = myMPController(r, x_hat, param)
             v = ubar(1:2);
         end
         u = v;
+    else
+        fprintf('Settled\n')
     end
 end % End of myMPController
