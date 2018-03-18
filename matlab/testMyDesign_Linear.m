@@ -1,7 +1,7 @@
 clear variables
 close all
 
-testShape = 1;
+testShape = 2;
 
 startingPoint = [0.05, 0.05];
 %% Create the test shape
@@ -19,7 +19,14 @@ switch ( testShape )
              0.45, 0.00;
              0.25, 0.20;
              0.05, 0.00];
-        targetPoint = [0.45, 0.05];
+         startingPoint = [0.05, 0.45];
+        c = [0, 0.5;
+             0.5, 0.5;
+             0.50, 0;
+             0.4, 0;
+             0.4, 0.4;
+             0, 0.4];
+        targetPoint = [0.45, 0.05];  
 end
 
 

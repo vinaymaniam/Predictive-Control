@@ -151,7 +151,14 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     %% End of construction        
 
     %% Compute stage constraint matrices and vector
-    [Dt,Et,bt]=genStageConstraints(A,B,D,cl,ch,ul,uh);
+%     [Dt,Et,bt]=genStageConstraints(A,B,D,cl,ch,ul,uh);
+    DA = D*A;
+    DB = D*B;
+    I = eye(size(B,2));
+    O = zeros(size(B,2),size(A,2));
+    Dt = [DA; O; O];
+    Et = [DB; I; -I];
+    bt = [ch; uh; -ul];
     %% Compute trajectory constraints matrices and vector
     [DD,EE,bb]=genTrajectoryConstraints(Dt,Et,bt,N);
 

@@ -19,7 +19,7 @@ function u = myMPController(r, x_hat, param)
                 (abs(x_hat(7)) < param.rTol);
     if ~condition
         %% Check if we crossed the turning point yet
-        if r(1,1) == param.TP1(1)
+        if r(1,1) == param.TP1(1) && r(3,1) == param.TP1(2)
             w = x_hat(1:8) - r(1:8);
             f = w'*param.G1';
             b = -(param.bb1 + param.J1*x_hat(1:8) + param.L1*r(1:8));

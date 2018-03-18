@@ -16,9 +16,11 @@ function r = myTargetGenerator(x_hat, param)
     if (param.toggle*x_hat(3) < param.toggle*(x_hat(1)*param.switch_line(1) + param.switch_line(2))) && stuck2 == 0
         r(1,1) = param.TP1(1);
         r(3,1) = param.TP1(2);
+%         disp(1)
     else        
         r(1,1) = param.TP2(1);
         r(3,1) = param.TP2(2);
+%         disp(2)
     end    
     radius = sqrt((abs(x_hat(1) - param.TP1(1)))^2+(abs(x_hat(3) - param.TP1(2)))^2);
     % 0.0003 was manually selected from data collection of the oscillatory

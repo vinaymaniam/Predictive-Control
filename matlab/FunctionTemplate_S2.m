@@ -152,7 +152,14 @@ function [ param ] = mySetup(c, startingPoint, targetPoint, eps_r, eps_t)
     %% End of construction        
 
     %% Compute stage constraint matrices and vector
-    [Dt,Et,bt]=genStageConstraints(A,B,D,cl,ch,ul,uh);
+%     [Dt,Et,bt]=genStageConstraints(A,B,D,cl,ch,ul,uh);
+    DA = D*A;
+    DB = D*B;
+    I = eye(size(B,2));
+    O = zeros(size(B,2),size(A,2));
+    Dt = [DA; O; O];
+    Et = [DB; I; -I];
+    bt = [ch; uh; -ul];
     %% Compute trajectory constraints matrices and vector
     [DD,EE,bb]=genTrajectoryConstraints(Dt,Et,bt,N);
 
@@ -291,9 +298,11 @@ function r = myTargetGenerator(x_hat, param)
     if (param.toggle*x_hat(3) < param.toggle*(x_hat(1)*param.switch_line(1) + param.switch_line(2))) && stuck2 == 0
         r(1,1) = param.TP1(1);
         r(3,1) = param.TP1(2);
+%         disp(1)
     else        
         r(1,1) = param.TP2(1);
         r(3,1) = param.TP2(2);
+%         disp(2)
     end    
     radius = sqrt((abs(x_hat(1) - param.TP1(1)))^2+(abs(x_hat(3) - param.TP1(2)))^2);
     % 0.0003 was manually selected from data collection of the oscillatory
@@ -350,7 +359,7 @@ function u = myMPController(r, x_hat, param)
                 (abs(x_hat(7)) < param.rTol);
     if ~condition
         %% Check if we crossed the turning point yet
-        if r(1,1) == param.TP1(1)
+        if r(1,1) == param.TP1(1) && r(3,1) == param.TP1(2)
             w = x_hat(1:8) - r(1:8);
             f = w'*param.G1';
             b = -(param.bb1 + param.J1*x_hat(1:8) + param.L1*r(1:8));
